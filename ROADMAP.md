@@ -25,17 +25,26 @@ Claude leggerà il codice esistente e implementerà solo ciò che manca.
 **Completato**:
 - ✅ `backend/alembic.ini` + `migrations/env.py` + `migrations/script.py.mako`
 - ✅ `migrations/versions/001_initial.py` — schema iniziale (users, accounts, categories, transactions)
-- ✅ `app/core/security.py` — `create_token`, `verify_token`, `get_current_user`
-- ✅ `app/api/v1/endpoints/auth.py` — register, login, me
+- ✅ `app/core/security.py` — `create_access_token`, `create_refresh_token`, `create_mfa_session_token`, `decode_token`, `verify_access_token`, `get_current_user`
+- ✅ `app/core/config.py` — `ACCESS_TOKEN_EXPIRE_MINUTES=30`, `REFRESH_TOKEN_EXPIRE_DAYS=7`, `REMEMBER_ME_EXPIRE_DAYS=30`
+- ✅ `app/api/v1/endpoints/auth.py` — register, login (JSON body), refresh, me
 - ✅ `docker compose up` → `alembic upgrade head` → uvicorn
 - ✅ `bcrypt==3.2.2` + `pydantic[email]` + `psycopg2-binary` in requirements
 
 **Criteri verificati**:
-- ✅ `POST /api/v1/auth/register` → JWT
-- ✅ `POST /api/v1/auth/login` → JWT
+- ✅ `POST /api/v1/auth/register` → `{access_token, refresh_token}`
+- ✅ `POST /api/v1/auth/login` (JSON `{email, password, remember_me}`) → `{access_token, refresh_token}`
+- ✅ `POST /api/v1/auth/refresh` → ruota entrambi i token, propaga `rem`
 - ✅ `GET /api/v1/auth/me` (token richiesto)
 - ✅ Tabelle create automaticamente allo startup via Alembic
 - ✅ `GET /health` → `{"status": "ok"}`
+
+**Durate token verificate**:
+| Scenario | Access token | Refresh token |
+|---|---|---|
+| Senza "Ricordami" | 30 min | 7 giorni (`rem=false`) |
+| Con "Ricordami" | 24 h (30×48) | 30 giorni (`rem=true`) |
+| Refresh successivo | eredita da `rem` | eredita da `rem` |
 
 ---
 
@@ -45,14 +54,22 @@ Claude leggerà il codice esistente e implementerà solo ciò che manca.
 
 ### Flusso login con MFA attivo
 ```
-POST /auth/login (email + password)
-  → se MFA disattivo:  { access_token: "..." }          ← comportamento attuale
-  → se MFA attivo:     { requires_mfa: true,
-                          session_token: "<JWT 5min>" }  ← nuovo
+POST /auth/login  { email, password, remember_me: bool }
+  → se MFA disattivo:  { access_token, refresh_token }
+  → se MFA attivo:     { requires_mfa: true, session_token: "<JWT 5min>" }
 
-POST /auth/mfa/verify (session_token + code TOTP 6 cifre)
-  → { access_token: "..." }
+POST /auth/mfa/verify  { session_token, code, remember_me: bool }
+  → { access_token, refresh_token }
+
+POST /auth/refresh  { refresh_token }
+  → { access_token, refresh_token }   ← flag rem propagato automaticamente
 ```
+
+**Durate token** (configurabili via env):
+| Scenario | Access token | Refresh token |
+|---|---|---|
+| Senza "Ricordami" | 30 min | 7 giorni |
+| Con "Ricordami" | 24 h (30 min × 48) | 30 giorni (`REMEMBER_ME_EXPIRE_DAYS`) |
 
 ### 1.5.1 Backend
 
@@ -78,18 +95,20 @@ totp_secret  = Column(String(64), nullable=True)
 totp_enabled = Column(Boolean, default=False, nullable=False)
 ```
 
-**`security.py`** — aggiungere:
+**`security.py`** — già implementato in M1 con remember_me:
 ```python
-def create_mfa_session_token(user_id: str) -> str:
-    # JWT 5 minuti, payload: {"sub": user_id, "type": "mfa_session"}
+create_access_token(user_id, remember_me)  # 30min / 24h
+create_refresh_token(user_id, remember_me) # 7gg / 30gg, rem nel payload
+create_mfa_session_token(user_id)           # 5 min, type=mfa_session
+decode_token(token) -> dict
 ```
 
-**`auth.py` — login modificato**:
+**`auth.py` — login già aggiornato**:
 ```python
 if user.totp_enabled:
-    return {"requires_mfa": True,
-            "session_token": create_mfa_session_token(str(user.id))}
-return {"access_token": create_token(str(user.id))}
+    return TokenResponse(requires_mfa=True,
+                         session_token=create_mfa_session_token(str(user.id)))
+return _tokens(user, remember_me=data.remember_me)
 ```
 
 **Nuovi endpoint**:
