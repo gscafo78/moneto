@@ -8,8 +8,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Budget App',
-        short_name: 'Budget',
+        name: 'Moneto',
+        short_name: 'Moneto',
         description: 'Gestione spese personali',
         theme_color: '#6366f1',
         background_color: '#0f0f13',
