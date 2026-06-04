@@ -11,6 +11,8 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
+    totp_secret = Column(String(64), nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     accounts = relationship("Account", back_populates="user", cascade="all, delete-orphan")
