@@ -4,7 +4,7 @@ from sqlalchemy import select
 from app.db.session import get_db
 from app.models.account import Account
 from app.models.user import User
-from app.api.v1.endpoints.auth import get_current_user
+from app.core.security import get_current_user
 from pydantic import BaseModel
 from typing import List
 import uuid
