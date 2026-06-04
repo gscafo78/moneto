@@ -6,9 +6,10 @@ from app.models.category import Category
 from app.models.user import User
 from app.core.security import get_current_user
 from pydantic import BaseModel
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 router = APIRouter()
+
 
 class CategoryCreate(BaseModel):
     name: str
@@ -16,33 +17,72 @@ class CategoryCreate(BaseModel):
     color: str = "#6366f1"
     type: Literal["expense", "income"]
 
-class CategoryOut(CategoryCreate):
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+
+
+class CategoryOut(BaseModel):
     id: str
-    is_default: bool = False
+    name: str
+    icon: str
+    color: str
+    type: str
+    is_default: bool
+
 
 DEFAULT_CATEGORIES = [
     ("🍕", "Cibo & Ristoranti", "#ef4444", "expense"),
-    ("🚗", "Trasporti", "#f97316", "expense"),
-    ("🏠", "Casa", "#eab308", "expense"),
-    ("💊", "Salute", "#22c55e", "expense"),
-    ("🎭", "Intrattenimento", "#8b5cf6", "expense"),
-    ("👕", "Abbigliamento", "#ec4899", "expense"),
-    ("📱", "Tecnologia", "#06b6d4", "expense"),
-    ("💼", "Stipendio", "#22c55e", "income"),
-    ("💰", "Entrate extra", "#10b981", "income"),
+    ("🚗", "Trasporti",         "#f97316", "expense"),
+    ("🏠", "Casa",              "#eab308", "expense"),
+    ("💊", "Salute",            "#22c55e", "expense"),
+    ("🎭", "Intrattenimento",   "#8b5cf6", "expense"),
+    ("👕", "Abbigliamento",     "#ec4899", "expense"),
+    ("📱", "Tecnologia",        "#06b6d4", "expense"),
+    ("🏋️", "Sport",             "#14b8a6", "expense"),
+    ("📚", "Istruzione",        "#a78bfa", "expense"),
+    ("✈️", "Viaggi",            "#f59e0b", "expense"),
+    ("💼", "Stipendio",         "#22c55e", "income"),
+    ("💰", "Entrate extra",     "#10b981", "income"),
+    ("🎁", "Regalo ricevuto",   "#f472b6", "income"),
 ]
+
+
+def _out(c: Category) -> CategoryOut:
+    return CategoryOut(id=str(c.id), name=c.name, icon=c.icon,
+                       color=c.color, type=c.type, is_default=c.is_default)
+
+
+async def _get_category(db: AsyncSession, category_id: str, user_id) -> Category:
+    result = await db.execute(
+        select(Category).where(Category.id == category_id, Category.user_id == user_id)
+    )
+    cat = result.scalar_one_or_none()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoria non trovata")
+    return cat
+
 
 @router.get("/", response_model=List[CategoryOut])
 async def list_categories(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await db.execute(select(Category).where(Category.user_id == user.id, Category.is_active == True))
+    result = await db.execute(
+        select(Category)
+        .where(Category.user_id == user.id, Category.is_active == True)
+        .order_by(Category.created_at)
+    )
     cats = result.scalars().all()
     if not cats:
-        # Seed categorie di default
-        defaults = [Category(user_id=user.id, icon=i, name=n, color=c, type=t, is_default=True) for i,n,c,t in DEFAULT_CATEGORIES]
+        defaults = [
+            Category(user_id=user.id, icon=i, name=n, color=c, type=t, is_default=True)
+            for i, n, c, t in DEFAULT_CATEGORIES
+        ]
         db.add_all(defaults)
         await db.commit()
-        return [CategoryOut(id=str(c.id), name=c.name, icon=c.icon, color=c.color, type=c.type, is_default=True) for c in defaults]
-    return [CategoryOut(id=str(c.id), name=c.name, icon=c.icon, color=c.color, type=c.type, is_default=c.is_default) for c in cats]
+        return [_out(c) for c in defaults]
+    return [_out(c) for c in cats]
+
 
 @router.post("/", response_model=CategoryOut, status_code=201)
 async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
@@ -50,4 +90,32 @@ async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_d
     db.add(cat)
     await db.commit()
     await db.refresh(cat)
-    return CategoryOut(id=str(cat.id), **data.model_dump())
+    return _out(cat)
+
+
+@router.patch("/{category_id}", response_model=CategoryOut)
+async def update_category(
+    category_id: str,
+    data: CategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    cat = await _get_category(db, category_id, user.id)
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(cat, field, value)
+    await db.commit()
+    await db.refresh(cat)
+    return _out(cat)
+
+
+@router.delete("/{category_id}", status_code=204)
+async def delete_category(
+    category_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    cat = await _get_category(db, category_id, user.id)
+    if cat.is_default:
+        raise HTTPException(status_code=400, detail="Le categorie predefinite non possono essere eliminate")
+    cat.is_active = False
+    await db.commit()

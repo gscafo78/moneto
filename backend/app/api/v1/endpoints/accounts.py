@@ -6,10 +6,10 @@ from app.models.account import Account
 from app.models.user import User
 from app.core.security import get_current_user
 from pydantic import BaseModel
-from typing import List
-import uuid
+from typing import List, Optional
 
 router = APIRouter()
+
 
 class AccountCreate(BaseModel):
     name: str
@@ -18,13 +18,44 @@ class AccountCreate(BaseModel):
     balance: float = 0
     currency: str = "EUR"
 
-class AccountOut(AccountCreate):
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+
+
+class AccountOut(BaseModel):
     id: str
+    name: str
+    icon: str
+    color: str
+    balance: float
+    currency: str
+
+
+def _out(a: Account) -> AccountOut:
+    return AccountOut(id=str(a.id), name=a.name, icon=a.icon,
+                      color=a.color, balance=float(a.balance), currency=a.currency)
+
+
+async def _get_account(db: AsyncSession, account_id: str, user_id) -> Account:
+    result = await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == user_id, Account.is_active == True)
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Conto non trovato")
+    return account
+
 
 @router.get("/", response_model=List[AccountOut])
 async def list_accounts(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await db.execute(select(Account).where(Account.user_id == user.id, Account.is_active == True))
-    return [AccountOut(id=str(a.id), name=a.name, icon=a.icon, color=a.color, balance=float(a.balance), currency=a.currency) for a in result.scalars()]
+    result = await db.execute(
+        select(Account).where(Account.user_id == user.id, Account.is_active == True).order_by(Account.created_at)
+    )
+    return [_out(a) for a in result.scalars()]
+
 
 @router.post("/", response_model=AccountOut, status_code=201)
 async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
@@ -32,13 +63,26 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
     db.add(account)
     await db.commit()
     await db.refresh(account)
-    return AccountOut(id=str(account.id), **data.model_dump())
+    return _out(account)
+
+
+@router.patch("/{account_id}", response_model=AccountOut)
+async def update_account(
+    account_id: str,
+    data: AccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    account = await _get_account(db, account_id, user.id)
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(account, field, value)
+    await db.commit()
+    await db.refresh(account)
+    return _out(account)
+
 
 @router.delete("/{account_id}", status_code=204)
 async def delete_account(account_id: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    result = await db.execute(select(Account).where(Account.id == account_id, Account.user_id == user.id))
-    account = result.scalar_one_or_none()
-    if not account:
-        raise HTTPException(status_code=404, detail="Conto non trovato")
+    account = await _get_account(db, account_id, user.id)
     account.is_active = False
     await db.commit()
