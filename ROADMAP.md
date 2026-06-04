@@ -18,29 +18,134 @@ Claude leggerà il codice esistente e implementerà solo ciò che manca.
 
 ---
 
-## Milestone 1 — Backend: autenticazione e modelli DB
+## Milestone 1 — Backend: autenticazione e modelli DB ✅
 
 **Obiettivo**: API funzionante con auth JWT, modelli DB e migrazioni Alembic.
 
-**File da creare / completare**:
-- `backend/alembic.ini` — configurazione Alembic
-- `backend/migrations/env.py` — collega i modelli SQLAlchemy ad Alembic
-- `backend/migrations/versions/001_initial.py` — migration iniziale (users, accounts, categories, transactions)
-- `backend/app/core/security.py` — helper JWT: `create_token`, `verify_token`, `get_current_user`
-- `backend/app/api/v1/endpoints/auth.py` — ✅ già presente, verificare e completare
-- Verificare che `docker compose up` avvii tutto senza errori
+**Completato**:
+- ✅ `backend/alembic.ini` + `migrations/env.py` + `migrations/script.py.mako`
+- ✅ `migrations/versions/001_initial.py` — schema iniziale (users, accounts, categories, transactions)
+- ✅ `app/core/security.py` — `create_token`, `verify_token`, `get_current_user`
+- ✅ `app/api/v1/endpoints/auth.py` — register, login, me
+- ✅ `docker compose up` → `alembic upgrade head` → uvicorn
+- ✅ `bcrypt==3.2.2` + `pydantic[email]` + `psycopg2-binary` in requirements
 
-**Criteri di completamento**:
-- `POST /api/v1/auth/register` crea utente e restituisce JWT
-- `POST /api/v1/auth/login` autentica e restituisce JWT
-- `GET /api/v1/auth/me` restituisce l'utente corrente (richiede token)
-- Le tabelle vengono create automaticamente allo startup
-- `GET /health` risponde `{"status": "ok"}`
+**Criteri verificati**:
+- ✅ `POST /api/v1/auth/register` → JWT
+- ✅ `POST /api/v1/auth/login` → JWT
+- ✅ `GET /api/v1/auth/me` (token richiesto)
+- ✅ Tabelle create automaticamente allo startup via Alembic
+- ✅ `GET /health` → `{"status": "ok"}`
 
-**Note tecniche**:
-- Usare `asyncpg` come driver PostgreSQL
-- JWT con `python-jose`, password con `passlib[bcrypt]`
-- `get_current_user` come dependency FastAPI da riusare in tutti gli endpoint protetti
+---
+
+## Milestone 1.5 — MFA opzionale (TOTP — Google Authenticator / Authy)
+
+**Obiettivo**: aggiungere autenticazione a due fattori opzionale con TOTP, seguendo lo stesso pattern di Nextfolio. L'utente attiva il 2FA dalle impostazioni; il login rimane email+password se il 2FA non è attivo.
+
+### Flusso login con MFA attivo
+```
+POST /auth/login (email + password)
+  → se MFA disattivo:  { access_token: "..." }          ← comportamento attuale
+  → se MFA attivo:     { requires_mfa: true,
+                          session_token: "<JWT 5min>" }  ← nuovo
+
+POST /auth/mfa/verify (session_token + code TOTP 6 cifre)
+  → { access_token: "..." }
+```
+
+### 1.5.1 Backend
+
+**Migration `002_mfa`** — aggiunge colonne alla tabella `users`:
+```sql
+ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64);
+ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT false;
+```
+
+**File da creare**:
+- `backend/migrations/versions/002_mfa.py` — migration ALTER TABLE
+- `backend/app/services/totp.py` — wrapper `pyotp`:
+  ```python
+  def generate_secret() -> str          # pyotp.random_base32()
+  def get_provisioning_uri(secret, email, issuer="Moneto") -> str
+  def verify_code(secret, code) -> bool  # valid_window=1 (±30s)
+  ```
+- `backend/app/api/v1/endpoints/mfa.py` — router `/auth/mfa/*`
+
+**Modello `User`** — aggiungere campi:
+```python
+totp_secret  = Column(String(64), nullable=True)
+totp_enabled = Column(Boolean, default=False, nullable=False)
+```
+
+**`security.py`** — aggiungere:
+```python
+def create_mfa_session_token(user_id: str) -> str:
+    # JWT 5 minuti, payload: {"sub": user_id, "type": "mfa_session"}
+```
+
+**`auth.py` — login modificato**:
+```python
+if user.totp_enabled:
+    return {"requires_mfa": True,
+            "session_token": create_mfa_session_token(str(user.id))}
+return {"access_token": create_token(str(user.id))}
+```
+
+**Nuovi endpoint**:
+```
+POST /api/v1/auth/mfa/verify
+     body: { session_token, code }
+     → decodifica session_token (type=mfa_session), verifica TOTP, restituisce access_token
+
+POST /api/v1/auth/mfa/setup       [autenticato]
+     → genera totp_secret, lo salva su DB (totp_enabled rimane false), restituisce { secret, uri }
+
+POST /api/v1/auth/mfa/enable      [autenticato]
+     body: { session_token, code }  ← session_token generato da /mfa/setup
+     → verifica TOTP, imposta totp_enabled=True
+
+POST /api/v1/auth/mfa/disable     [autenticato]
+     body: { session_token, code }
+     → verifica TOTP, imposta totp_enabled=False, totp_secret=None
+```
+
+**`requirements.txt`** — aggiungere:
+```
+pyotp==2.9.0
+```
+
+**Criteri di completamento backend**:
+- Login senza MFA → `{ access_token }` (invariato)
+- Login con MFA → `{ requires_mfa: true, session_token }` (JWT 5min)
+- `POST /mfa/verify` con session_token valido + codice corretto → `{ access_token }`
+- `POST /mfa/verify` con codice sbagliato → 401
+- `POST /mfa/setup` → secret + URI (QR)
+- `POST /mfa/enable` attiva 2FA sull'account
+- `POST /mfa/disable` disattiva 2FA sull'account
+
+### 1.5.2 Frontend (da implementare in Milestone 3)
+
+**Login a 2 step** — `pages/Login.tsx`:
+```
+Step 1: form email + password → POST /auth/login
+  se requires_mfa=true → step 2 (salva session_token in stato locale)
+Step 2: input codice 6 cifre → POST /auth/mfa/verify
+  successo → salva access_token → redirect home
+```
+
+**Sezione MFA in Impostazioni** — `pages/Settings.tsx`:
+- Se MFA disattivo: bottone "Attiva 2FA"
+  1. `POST /mfa/setup` → riceve URI
+  2. Mostrare QR code (`react-qr-code`)
+  3. Campo codice + bottone "Verifica e attiva" → `POST /mfa/enable`
+- Se MFA attivo: badge "2FA attivo ✓" + bottone "Disattiva"
+  1. Campo codice + bottone "Disattiva" → `POST /mfa/disable`
+
+**Dipendenze frontend**:
+```
+react-qr-code   ← per mostrare il QR di provisioning
+```
 
 ---
 
@@ -126,12 +231,33 @@ DEFAULT_CATEGORIES = [
 
 **Criteri di completamento**:
 - Login con email/password funziona, token salvato in localStorage
+- Login a 2 step se MFA attivo (credenziali → codice TOTP 6 cifre)
 - Utente non autenticato viene rediretto a `/login`
 - Logout pulisce il token e reindirizza a `/login`
-- Bottom nav con 4 tab: Home, Movimenti, Conti, Categorie
+- Bottom nav con 4 tab: Home, Movimenti, Conti, Impostazioni
 - TopBar con navigazione mese (← Giugno 2025 →)
 - Il mese corrente non è avanzabile oltre oggi
 - Layout funziona sia su mobile (375px) che desktop (1200px)
+
+**MFA nel login** (`pages/Login.tsx`):
+```
+Step 1: form email + password
+  → POST /auth/login
+  → se { access_token }   → salva token → home
+  → se { requires_mfa: true, session_token } → step 2
+
+Step 2: card con campo codice TOTP 6 cifre
+  → POST /auth/mfa/verify { session_token, code }
+  → { access_token } → salva token → home
+```
+
+**MFA nelle Impostazioni** (`pages/Settings.tsx`):
+- Sezione "Sicurezza" con stato MFA corrente
+- Se disattivo:
+  1. Bottone "Configura autenticazione a due fattori"
+  2. QR code (`react-qr-code`) + secret testuale
+  3. Campo codice + bottone "Attiva" → `POST /auth/mfa/enable`
+- Se attivo: badge verde + bottone "Disattiva" → `POST /auth/mfa/disable` (richiede codice)
 
 **Design**:
 - Tema scuro: sfondo `#0f0f13`, card `#1a1a24`, bordi `white/10`
