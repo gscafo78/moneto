@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Wallet } from 'lucide-react'
 import { accountsApi, type Account } from '../api/accounts'
 import AccountCard from '../components/accounts/AccountCard'
+import { AccountsSkeleton } from '../components/ui/Skeleton'
 import AddAccountSheet from '../components/accounts/AddAccountSheet'
 
 export default function Accounts() {
@@ -35,12 +36,7 @@ export default function Accounts() {
           </div>
         </div>
 
-        {/* Loading */}
-        {isLoading && (
-          <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
+        {isLoading && <AccountsSkeleton />}
 
         {/* Lista conti */}
         {!isLoading && accounts.length === 0 && (

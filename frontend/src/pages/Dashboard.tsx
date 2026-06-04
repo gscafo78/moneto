@@ -6,6 +6,7 @@ import SpendingChart from '../components/dashboard/SpendingChart'
 import CategoryList from '../components/dashboard/CategoryList'
 import AddTransactionButton from '../components/ui/AddTransactionButton'
 import AddTransactionSheet from '../components/transactions/AddTransactionSheet'
+import { DashboardSkeleton } from '../components/ui/Skeleton'
 
 export default function Dashboard() {
   const { data, isLoading, year, month } = useMonthlyStats()
@@ -22,11 +23,7 @@ export default function Dashboard() {
         balance={summary.balance}
       />
 
-      {isLoading && (
-        <div className="flex justify-center py-16">
-          <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
+      {isLoading && <DashboardSkeleton />}
 
       {!isLoading && summary.by_category.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-white/30 gap-3">

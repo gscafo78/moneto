@@ -6,6 +6,7 @@ import 'dayjs/locale/it'
 
 import { useTransactions } from '../hooks/useTransactions'
 import { transactionsApi, type Transaction } from '../api/transactions'
+import { TransactionsSkeleton } from '../components/ui/Skeleton'
 import { categoriesApi } from '../api/categories'
 import { accountsApi } from '../api/accounts'
 import TransactionList from '../components/transactions/TransactionList'
@@ -69,12 +70,7 @@ export default function Transactions() {
         ))}
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex justify-center py-16">
-          <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
+      {isLoading && <TransactionsSkeleton />}
 
       {/* Empty state */}
       {!isLoading && filtered.length === 0 && (

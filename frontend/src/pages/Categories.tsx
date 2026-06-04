@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { categoriesApi, type Category } from '../api/categories'
+import { CategoriesSkeleton } from '../components/ui/Skeleton'
 import CategoryGrid from '../components/categories/CategoryGrid'
 import AddCategorySheet from '../components/categories/AddCategorySheet'
 
@@ -31,11 +32,7 @@ export default function Categories() {
   return (
     <>
       <div className="px-4 py-4 space-y-6">
-        {isLoading && (
-          <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
+        {isLoading && <CategoriesSkeleton />}
 
         {!isLoading && (
           <>
