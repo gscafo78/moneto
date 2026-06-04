@@ -3,6 +3,7 @@ from typing import List
 
 
 class Settings(BaseSettings):
+    APP_ENV: str = "development"   # "production" in prod
     SECRET_KEY: str = "dev-secret-change-in-prod"
     ALGORITHM: str = "HS256"
 
