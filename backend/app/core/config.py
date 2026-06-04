@@ -4,6 +4,9 @@ from typing import List
 
 class Settings(BaseSettings):
     APP_ENV: str = "development"   # "production" in prod
+    # Se False (default), la registrazione è aperta solo al primo utente.
+    # Impostare ALLOW_REGISTRATION=true nel .env per ri-abilitarla.
+    ALLOW_REGISTRATION: bool = False
     SECRET_KEY: str = "dev-secret-change-in-prod"
     ALGORITHM: str = "HS256"
 

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.core.security import (
@@ -62,11 +63,33 @@ def _tokens(user: User, remember_me: bool = False) -> TokenResponse:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+@router.get("/registration-open")
+async def registration_open(db: AsyncSession = Depends(get_db)):
+    """Restituisce se la registrazione pubblica è attiva (usato dal frontend)."""
+    if settings.ALLOW_REGISTRATION:
+        return {"open": True}
+    count_result = await db.execute(select(User))
+    has_users = count_result.scalars().first() is not None
+    return {"open": not has_users}
+
+
 @router.post("/register", response_model=TokenResponse, status_code=201)
 async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
+    # Controlla se esistono già utenti
+    count_result = await db.execute(select(User))
+    has_users = count_result.scalars().first() is not None
+
+    # Blocca la registrazione se ci sono già utenti e ALLOW_REGISTRATION è False
+    if has_users and not settings.ALLOW_REGISTRATION:
+        raise HTTPException(
+            status_code=403,
+            detail="La registrazione pubblica è disabilitata. Contatta l'amministratore.",
+        )
+
     existing = await db.execute(select(User).where(User.email == data.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email già registrata")
+
     user = User(
         email=data.email,
         hashed_password=pwd_context.hash(data.password),
@@ -75,7 +98,6 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    # Primo accesso: nessun "Ricordami", token breve
     return _tokens(user, remember_me=False)
 
 

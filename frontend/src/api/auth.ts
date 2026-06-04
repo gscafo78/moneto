@@ -39,4 +39,9 @@ export const authApi = {
     const { data } = await api.get<UserOut>('/auth/me')
     return data
   },
+
+  async registrationOpen(): Promise<{ open: boolean }> {
+    const { data } = await api.get<{ open: boolean }>('/auth/registration-open')
+    return data
+  },
 }

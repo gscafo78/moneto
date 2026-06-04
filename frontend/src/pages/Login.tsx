@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Coins, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { authApi } from '../api/auth'
@@ -7,6 +7,11 @@ import { useAuthStore } from '../store/authStore'
 export default function Login() {
   const navigate  = useNavigate()
   const setTokens = useAuthStore(s => s.setTokens)
+  const [registrationOpen, setRegistrationOpen] = useState(false)
+
+  useEffect(() => {
+    authApi.registrationOpen().then(r => setRegistrationOpen(r.open)).catch(() => {})
+  }, [])
 
   // Step 1 — credenziali
   const [email,    setEmail]    = useState('')
@@ -135,10 +140,14 @@ export default function Login() {
             </button>
 
             <p className="text-center text-sm text-white/40">
-              Non hai un account?{' '}
-              <Link to="/register" className="text-brand hover:text-brand-dark font-medium transition">
-                Registrati
-              </Link>
+              {registrationOpen && (
+                <>
+                  Non hai un account?{' '}
+                  <Link to="/register" className="text-brand hover:text-brand-dark font-medium transition">
+                    Registrati
+                  </Link>
+                </>
+              )}
             </p>
           </form>
 
