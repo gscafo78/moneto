@@ -518,9 +518,99 @@ Da implementare dopo che l'app base è stabile.
   - Export CSV delle transazioni del mese
 
 ### 9c — Transazioni ricorrenti
-- Campo `recurring` (none | daily | weekly | monthly | yearly) su Transaction
-- Job schedulato (APScheduler in FastAPI) che crea la transazione ricorrente automaticamente
-- Lista transazioni ricorrenti con possibilità di disattivare
+
+**Caso d'uso tipico**: rata dell'auto di €250 il giorno 15 di ogni mese, abbonamento Netflix ogni mese, affitto ogni primo del mese.
+
+#### Backend
+
+**Migration `003_recurring`**:
+```sql
+CREATE TABLE recurring_transactions (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id  UUID NOT NULL REFERENCES accounts(id),
+    category_id UUID NOT NULL REFERENCES categories(id),
+    amount      NUMERIC(12,2) NOT NULL,
+    type        VARCHAR(10) NOT NULL,          -- 'expense' | 'income'
+    description VARCHAR(255),
+    frequency   VARCHAR(10) NOT NULL,          -- 'daily' | 'weekly' | 'monthly' | 'yearly'
+    day_of_month SMALLINT,                     -- 1-31, usato se frequency='monthly'
+    day_of_week  SMALLINT,                     -- 0-6 (lun-dom), usato se frequency='weekly'
+    start_date  DATE NOT NULL,
+    end_date    DATE,                          -- NULL = senza scadenza
+    is_active   BOOLEAN NOT NULL DEFAULT true,
+    last_run_at DATE,                          -- ultima data in cui è stata creata la transazione
+    created_at  TIMESTAMPTZ DEFAULT now()
+);
+```
+
+**Endpoint**:
+```
+GET    /api/v1/recurring/          — lista transazioni ricorrenti dell'utente
+POST   /api/v1/recurring/          — crea nuova transazione ricorrente
+PATCH  /api/v1/recurring/{id}      — modifica (importo, descrizione, is_active, end_date)
+DELETE /api/v1/recurring/{id}      — elimina (non cancella le transazioni già create)
+POST   /api/v1/recurring/{id}/run  — esecuzione manuale (debug / recupero mesi persi)
+```
+
+**Job schedulato** (`app/services/recurring.py`):
+- APScheduler in-process avviato allo startup di FastAPI (`lifespan`)
+- Cron giornaliero a mezzanotte: controlla tutte le `recurring_transactions` attive
+- Per ogni ricorrenza, crea la transazione se `last_run_at < oggi` e la data di scadenza non è passata
+- Aggiorna `last_run_at` dopo ogni creazione
+- Transazioni già create rimangono intatte se si disattiva la ricorrenza
+
+**`requirements.txt`** — aggiungere:
+```
+APScheduler==3.10.4
+```
+
+#### Frontend
+
+**Sezione "Ricorrenti"** nella pagina Transazioni (tab aggiuntivo) o pagina dedicata:
+
+```
+┌─────────────────────────────┐
+│  Ricorrenti         [+ Nuova]│
+├─────────────────────────────┤
+│  🚗 Rata auto                │
+│     €250,00 · Ogni mese · g.15│
+│     Conto corrente    [●] [⋯]│
+├─────────────────────────────┤
+│  🏠 Affitto                  │
+│     €600,00 · Ogni mese · g.1 │
+│     Conto corrente    [●] [⋯]│
+├─────────────────────────────┤
+│  📱 Netflix                  │
+│     €17,99 · Ogni mese · g.8  │
+│     Carta credito   [○] [⋯] │
+│     (disattivato)            │
+└─────────────────────────────┘
+```
+
+**Sheet "Nuova ricorrente"** — campi:
+- Tipo (Spesa / Entrata)
+- Importo (tastierino)
+- Categoria
+- Conto
+- Descrizione (es. "Rata auto Fiat")
+- Frequenza: Giornaliera / Settimanale / Mensile / Annuale
+- Giorno del mese (se Mensile, 1–28 per evitare problemi febbraio)
+- Data inizio (default oggi)
+- Data fine (opzionale, "Senza scadenza" come default)
+
+**File da creare**:
+- `frontend/src/api/recurring.ts`
+- `frontend/src/hooks/useRecurring.ts`
+- `frontend/src/components/transactions/RecurringList.tsx`
+- `frontend/src/components/transactions/AddRecurringSheet.tsx`
+
+**Criteri di completamento**:
+- Una ricorrenza mensile al giorno X genera automaticamente la transazione ogni mese
+- Toggle attiva/disattiva senza perdere la configurazione
+- Le transazioni già generate rimangono nello storico se si elimina la ricorrenza
+- Nessuna transazione duplicata se il job gira più volte nello stesso giorno
+- End-to-end verificato: creo rata auto il 15 → il 15 del mese successivo la transazione appare da sola
 
 ### 9d — Multi-valuta
 - Ogni conto ha la propria `currency`
