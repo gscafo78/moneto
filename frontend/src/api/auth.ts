@@ -12,6 +12,7 @@ export interface UserOut {
   id: string
   email: string
   name: string | null
+  totp_enabled: boolean
 }
 
 export const authApi = {
@@ -42,6 +43,23 @@ export const authApi = {
 
   async registrationOpen(): Promise<{ open: boolean }> {
     const { data } = await api.get<{ open: boolean }>('/auth/registration-open')
+    return data
+  },
+}
+
+export const mfaApi = {
+  async setup(): Promise<{ secret: string; uri: string }> {
+    const { data } = await api.post<{ secret: string; uri: string }>('/auth/mfa/setup')
+    return data
+  },
+
+  async enable(code: string): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/mfa/enable', { code })
+    return data
+  },
+
+  async disable(code: string): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/mfa/disable', { code })
     return data
   },
 }

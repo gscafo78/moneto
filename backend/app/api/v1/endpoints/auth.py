@@ -48,6 +48,7 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str | None
+    totp_enabled: bool = False
 
     model_config = {"from_attributes": True}
 

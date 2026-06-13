@@ -8,6 +8,8 @@ interface AuthState {
   init: () => Promise<void>
   // Salva i token e carica l'utente dopo login / register / mfa-verify
   setTokens: (access: string, refresh: string) => Promise<void>
+  // Ricarica l'utente corrente (es. dopo attivazione/disattivazione MFA)
+  refreshUser: () => Promise<void>
   logout: () => void
 }
 
@@ -43,6 +45,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setTokens: async (access, refresh) => {
     saveTokens(access, refresh)
+    const user = await authApi.me()
+    set({ user })
+  },
+
+  refreshUser: async () => {
     const user = await authApi.me()
     set({ user })
   },

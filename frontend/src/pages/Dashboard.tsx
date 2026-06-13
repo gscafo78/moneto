@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { ReceiptText } from 'lucide-react'
 import { useMonthlyStats } from '../hooks/useMonthlyStats'
+import { useAccountStore } from '../store/accountStore'
+import { accountsApi } from '../api/accounts'
 import SummaryBar from '../components/dashboard/SummaryBar'
 import SpendingChart from '../components/dashboard/SpendingChart'
 import CategoryList from '../components/dashboard/CategoryList'
@@ -13,14 +16,39 @@ export default function Dashboard() {
   const [selectedCat, setSelectedCat]   = useState<string | null>(null)
   const [sheetOpen, setSheetOpen]       = useState(false)
 
-  const summary = data ?? { income: 0, expenses: 0, balance: 0, by_category: [] }
+  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list })
+  const selectedAccountId = useAccountStore(s => s.selectedAccountId)
+  const setSelectedAccountId = useAccountStore(s => s.setSelectedAccountId)
+
+  const summary = data ?? { income: 0, expenses: 0, balance: 0, real_balance: 0, by_category: [] }
 
   return (
     <>
+      {accounts.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto px-4 py-2 -mb-1">
+          <button
+            onClick={() => setSelectedAccountId(null)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${!selectedAccountId ? 'bg-brand text-white' : 'bg-surface-overlay text-white/50'}`}
+          >
+            Tutti i conti
+          </button>
+          {accounts.map(a => (
+            <button
+              key={a.id}
+              onClick={() => setSelectedAccountId(a.id)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition whitespace-nowrap ${selectedAccountId === a.id ? 'bg-brand text-white' : 'bg-surface-overlay text-white/50'}`}
+            >
+              {a.icon} {a.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <SummaryBar
         income={summary.income}
         expenses={summary.expenses}
         balance={summary.balance}
+        realBalance={summary.real_balance}
       />
 
       {isLoading && <DashboardSkeleton />}

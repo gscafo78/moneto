@@ -519,103 +519,168 @@ Da implementare dopo che l'app base è stabile.
 
 ### 9c — Transazioni ricorrenti
 
-**Caso d'uso tipico**: rata dell'auto di €250 il giorno 15 di ogni mese, abbonamento Netflix ogni mese, affitto ogni primo del mese.
-
-#### Backend
-
-**Migration `003_recurring`**:
-```sql
-CREATE TABLE recurring_transactions (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    account_id  UUID NOT NULL REFERENCES accounts(id),
-    category_id UUID NOT NULL REFERENCES categories(id),
-    amount      NUMERIC(12,2) NOT NULL,
-    type        VARCHAR(10) NOT NULL,          -- 'expense' | 'income'
-    description VARCHAR(255),
-    frequency   VARCHAR(10) NOT NULL,          -- 'daily' | 'weekly' | 'monthly' | 'yearly'
-    day_of_month SMALLINT,                     -- 1-31, usato se frequency='monthly'
-    day_of_week  SMALLINT,                     -- 0-6 (lun-dom), usato se frequency='weekly'
-    start_date  DATE NOT NULL,
-    end_date    DATE,                          -- NULL = senza scadenza
-    is_active   BOOLEAN NOT NULL DEFAULT true,
-    last_run_at DATE,                          -- ultima data in cui è stata creata la transazione
-    created_at  TIMESTAMPTZ DEFAULT now()
-);
-```
-
-**Endpoint**:
-```
-GET    /api/v1/recurring/          — lista transazioni ricorrenti dell'utente
-POST   /api/v1/recurring/          — crea nuova transazione ricorrente
-PATCH  /api/v1/recurring/{id}      — modifica (importo, descrizione, is_active, end_date)
-DELETE /api/v1/recurring/{id}      — elimina (non cancella le transazioni già create)
-POST   /api/v1/recurring/{id}/run  — esecuzione manuale (debug / recupero mesi persi)
-```
-
-**Job schedulato** (`app/services/recurring.py`):
-- APScheduler in-process avviato allo startup di FastAPI (`lifespan`)
-- Cron giornaliero a mezzanotte: controlla tutte le `recurring_transactions` attive
-- Per ogni ricorrenza, crea la transazione se `last_run_at < oggi` e la data di scadenza non è passata
-- Aggiorna `last_run_at` dopo ogni creazione
-- Transazioni già create rimangono intatte se si disattiva la ricorrenza
-
-**`requirements.txt`** — aggiungere:
-```
-APScheduler==3.10.4
-```
-
-#### Frontend
-
-**Sezione "Ricorrenti"** nella pagina Transazioni (tab aggiuntivo) o pagina dedicata:
-
-```
-┌─────────────────────────────┐
-│  Ricorrenti         [+ Nuova]│
-├─────────────────────────────┤
-│  🚗 Rata auto                │
-│     €250,00 · Ogni mese · g.15│
-│     Conto corrente    [●] [⋯]│
-├─────────────────────────────┤
-│  🏠 Affitto                  │
-│     €600,00 · Ogni mese · g.1 │
-│     Conto corrente    [●] [⋯]│
-├─────────────────────────────┤
-│  📱 Netflix                  │
-│     €17,99 · Ogni mese · g.8  │
-│     Carta credito   [○] [⋯] │
-│     (disattivato)            │
-└─────────────────────────────┘
-```
-
-**Sheet "Nuova ricorrente"** — campi:
-- Tipo (Spesa / Entrata)
-- Importo (tastierino)
-- Categoria
-- Conto
-- Descrizione (es. "Rata auto Fiat")
-- Frequenza: Giornaliera / Settimanale / Mensile / Annuale
-- Giorno del mese (se Mensile, 1–28 per evitare problemi febbraio)
-- Data inizio (default oggi)
-- Data fine (opzionale, "Senza scadenza" come default)
-
-**File da creare**:
-- `frontend/src/api/recurring.ts`
-- `frontend/src/hooks/useRecurring.ts`
-- `frontend/src/components/transactions/RecurringList.tsx`
-- `frontend/src/components/transactions/AddRecurringSheet.tsx`
-
-**Criteri di completamento**:
-- Una ricorrenza mensile al giorno X genera automaticamente la transazione ogni mese
-- Toggle attiva/disattiva senza perdere la configurazione
-- Le transazioni già generate rimangono nello storico se si elimina la ricorrenza
-- Nessuna transazione duplicata se il job gira più volte nello stesso giorno
-- End-to-end verificato: creo rata auto il 15 → il 15 del mese successivo la transazione appare da sola
+Implementata nella **Milestone 12 — Spese ricorrenti + Saldo reale** (vedi sotto), con
+frequenze settimanale/mensile/bimestrale/trimestrale, shift sui giorni festivi italiani e
+proiezione nella dashboard, in sostituzione di questa bozza iniziale.
 
 ### 9d — Multi-valuta
 - Ogni conto ha la propria `currency`
 - Endpoint che recupera tassi di cambio (es. da exchangerate-api.com, gratuito)
 - Conversione automatica in EUR per le statistiche aggregate
+
+---
+
+## Milestone 10 — Layout desktop con sidebar (stile Nextfolio) ✅
+
+**Obiettivo**: quando l'app è apertaa da browser desktop (≥768px, breakpoint `md`), mostrare un layout diverso da quello mobile: sidebar laterale fissa con tutte le sezioni, topbar con menu utente, e una pagina Impostazioni dedicata. Su mobile il layout attuale (bottom nav, max-w-2xl) resta invariato. Pattern di riferimento: `nextfolio/frontend/src/components/layout/` (`Sidebar.tsx`, `MainLayout.tsx`, `TopBar.tsx`).
+
+**File da creare**:
+- `frontend/src/components/layout/Sidebar.tsx` — sidebar laterale, visibile solo `md:flex` (nascosta su mobile)
+- `frontend/src/pages/Settings.tsx` — pagina Impostazioni (profilo, sicurezza/MFA, preferenze, logout)
+- `frontend/src/pages/About.tsx` — pagina info app (versione, link, ecc.) — opzionale, come in Nextfolio
+
+**File da modificare**:
+- `frontend/src/components/layout/Layout.tsx`:
+  - Su mobile (`< md`): comportamento attuale, bottom nav + `max-w-2xl mx-auto`
+  - Su desktop (`≥ md`): `<Sidebar />` a sinistra + area contenuto a destra (no `max-w-2xl`, niente bottom nav), `BottomNav` con `md:hidden`
+- `frontend/src/components/layout/BottomNav.tsx` — aggiungere `md:hidden`, aggiungere voce "Impostazioni" (icona `Settings`)
+- `frontend/src/components/layout/TopBar.tsx` — su desktop aggiungere menu utente in alto a destra (avatar, link a Impostazioni, logout), mantenendo la navigazione mese (← Giugno 2025 →) centrale
+- `frontend/src/App.tsx` — aggiungere route `/settings` (e `/about` se creata)
+
+**Sidebar — voci di navigazione**:
+```
+📊 Home          → /
+↔️  Movimenti     → /transactions
+💼 Conti          → /accounts
+🏷️  Categorie     → /categories
+⚙️  Impostazioni  → /settings
+```
+
+**Pagina Impostazioni — sezioni**:
+- **Profilo**: email utente, nome (se presente)
+- **Sicurezza**: stato MFA + setup/disable (riusa il flusso già descritto in Milestone 1.5/3, oggi non ancora collegato a una pagina)
+- **Preferenze**: tema (se in futuro si aggiunge light mode), valuta predefinita
+- **Account**: bottone "Esci" (logout)
+
+**Layout responsive — schema**:
+```
+Mobile (< md)                    Desktop (≥ md)
+┌───────────────────┐            ┌────────┬──────────────────────────┐
+│  ← Giugno 2025 →  │            │        │  ← Giugno 2025 →    👤 ▾ │
+├───────────────────┤            │        ├──────────────────────────┤
+│                   │            │ Sidebar│                          │
+│     Pagina        │            │  📊    │        Pagina            │
+│                   │            │  ↔️    │                          │
+│                   │            │  💼    │                          │
+├───────────────────┤            │  🏷️    │                          │
+│ 📊 ↔️ 💼 🏷️ ⚙️ │            │  ⚙️    │                          │
+└───────────────────┘            └────────┴──────────────────────────┘
+   bottom nav                       sidebar fissa, no bottom nav
+```
+
+**Criteri di completamento**:
+- A larghezza < 768px il layout è identico a quello attuale (nessuna regressione)
+- A larghezza ≥ 768px appare la sidebar laterale con tutte le sezioni, la bottom nav è nascosta
+- La pagina Impostazioni è raggiungibile sia da sidebar (desktop) che da bottom nav (mobile)
+- Il contenuto centrale non è più limitato a `max-w-2xl` su desktop, usa lo spazio disponibile
+- Cambiare sezione dalla sidebar aggiorna la pagina senza reload (routing client-side)
+- Stile coerente con il tema scuro esistente (`#0f0f13`, `#1a1a24`, accent indigo `#6366f1`)
+
+---
+
+## Milestone 11 — Riorganizzazione categorie ✅
+
+**Obiettivo**: le categorie importate da Firefly III (Milestone "migrazione dati") erano
+troppo granulari — 55 categorie (46 spese + 9 entrate) con doppioni concettuali (es.
+"Farmaci", "Spese Sanitarie", "Visite mediche", "Ausili medici" tutte riconducibili a
+"Salute"). Sono state accorpate in **21 categorie** (16 spese + 5 entrate), riassegnando le
+1.335 transazioni esistenti senza perdita di dati.
+
+**Script**: `scripts/consolidate_categories.py` (one-off, stesso pattern di
+`migrate_from_firefly.py`) — per ogni gruppo rinomina/ricolora la categoria con più
+transazioni, riassegna le transazioni delle categorie accorpate e le elimina, tutto in
+un'unica transazione SQL.
+
+**Nuovo elenco categorie**:
+
+| Spese | Entrate |
+|---|---|
+| 🛒 Spesa & Alimentari | 💼 Stipendio |
+| 🍕 Ristoranti & Bar | 💸 Rimborsi |
+| 🚗 Trasporti | 📈 Investimenti |
+| 🏠 Casa | 🎁 Regali ricevuti |
+| 💡 Bollette & Utenze | 💰 Altre entrate |
+| ✈️ Viaggi & Vacanze | |
+| 🛍️ Shopping | |
+| 📖 Istruzione | |
+| 📱 Abbonamenti | |
+| 🛡️ Assicurazioni | |
+| 🏥 Salute | |
+| 🎭 Intrattenimento & Tempo libero | |
+| 🐾 Animali | |
+| 💰 Risparmi & Investimenti | |
+| 🔄 Trasferimento | |
+| 📦 Varie | |
+
+`DEFAULT_CATEGORIES` in `backend/app/api/v1/endpoints/categories.py` aggiornato allo stesso
+elenco, così eventuali nuovi utenti partono con il set consolidato.
+
+**Criteri di completamento**:
+- `SELECT COUNT(*) FROM categories` → 21
+- Totale transazioni invariato (1.335), nessuna orfana
+- Pagina Categorie e Dashboard mostrano le nuove categorie con icone/colori corretti
+
+---
+
+## Milestone 12 — Spese ricorrenti + Saldo reale ✅
+
+**Obiettivo**: gestire spese/entrate ricorrenti (abbonamenti, rate, affitto) con frequenza
+settimanale/mensile/bimestrale/trimestrale, fine prevista o ricorrenza indefinita, e
+calcolo automatico dello shift sui giorni festivi italiani. In dashboard, una nuova
+metrica "Saldo reale" mostra quanto resterà davvero a fine mese tenendo conto delle
+ricorrenze non ancora addebitate.
+
+### Backend
+- `app/services/holidays.py` — calcolo festività italiane (fisse + Lunedì dell'Angelo via
+  algoritmo di Gauss) e `next_business_day()` (salta weekend e festivi)
+- Modello `RecurringTransaction` (`recurring_transactions`, migration `003_recurring`):
+  importo, tipo, categoria/conto, frequenza (`weekly`/`monthly`/`bimonthly`/`quarterly`),
+  `start_date` (data di addebito di riferimento), `end_date` opzionale (NULL = senza
+  scadenza), `last_run_date`
+- `app/services/recurring.py`:
+  - `next_raw_date()` calcola la prossima occorrenza grezza dalla frequenza
+  - `process_due_recurring()` — job giornaliero: genera le `Transaction` per le occorrenze
+    (shiftate al primo giorno lavorativo) ormai scadute, aggiorna `Account.balance` e
+    `last_run_date`
+  - `projected_occurrences()` — occorrenze previste nel mese corrente non ancora generate,
+    usate per `/stats/monthly`
+- `APScheduler` (`AsyncIOScheduler`) avviato nel `lifespan` di `app/main.py`, cron
+  giornaliero alle 00:10
+- `GET/POST/PATCH/DELETE /api/v1/recurring/` — CRUD ricorrenze dell'utente
+- `/api/v1/stats/monthly` esteso:
+  - `real_balance` = patrimonio totale (somma saldi conti attivi) − spese ricorrenti
+    previste non ancora generate per il resto del mese + entrate ricorrenti previste
+  - le occorrenze ricorrenti previste del mese vengono aggiunte anche a `income`/`expenses`
+    e a `by_category`, così appaiono già nel grafico a torta
+
+### Frontend
+- `frontend/src/api/recurring.ts` — tipi e chiamate CRUD
+- `frontend/src/pages/Recurring.tsx` + `components/recurring/RecurringCard.tsx` +
+  `components/recurring/AddRecurringSheet.tsx` — nuova pagina "Ricorrenti" (lista,
+  creazione/modifica/eliminazione, selezione frequenza e data di fine opzionale)
+- Voce "Ricorrenti" in `Sidebar.tsx` e `BottomNav.tsx`
+- `SummaryBar.tsx` — quarta card "Saldo reale" (griglia 2×2 su mobile, 4 colonne da `sm`)
+- `Dashboard.tsx` passa `summary.real_balance` a `SummaryBar`
+
+**Criteri di completamento**:
+- `alembic upgrade head` crea `recurring_transactions` senza errori
+- Creando una ricorrenza mensile, `GET /api/v1/stats/monthly` per il mese corrente
+  restituisce `real_balance` e, se ci sono occorrenze previste, le somma a `by_category`
+- Una ricorrenza con `start_date` su un giorno festivo/weekend viene addebitata (job o
+  esecuzione manuale di `process_due_recurring`) con `date` spostata al primo giorno
+  lavorativo successivo
+- Dashboard mostra la card "Saldo reale" e il grafico a torta include le ricorrenti
+  previste del mese
 
 ---
 
@@ -691,6 +756,7 @@ monefy-clone/
 │       ├── components/
 │       │   ├── layout/
 │       │   │   ├── Layout.tsx
+│       │   │   ├── Sidebar.tsx
 │       │   │   ├── TopBar.tsx
 │       │   │   └── BottomNav.tsx
 │       │   ├── ui/
@@ -718,7 +784,9 @@ monefy-clone/
 │           ├── Dashboard.tsx
 │           ├── Transactions.tsx
 │           ├── Accounts.tsx
-│           └── Categories.tsx
+│           ├── Categories.tsx
+│           ├── Settings.tsx
+│           └── About.tsx
 │
 └── nginx/
     └── nginx.conf

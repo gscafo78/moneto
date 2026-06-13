@@ -12,6 +12,7 @@ export interface MonthlySummary {
   income: number
   expenses: number
   balance: number
+  real_balance: number
   by_category: CategoryStat[]
 }
 
@@ -23,8 +24,10 @@ export interface MonthTrend {
 }
 
 export const statsApi = {
-  async monthly(year: number, month: number): Promise<MonthlySummary> {
-    const { data } = await api.get<MonthlySummary>('/stats/monthly', { params: { year, month } })
+  async monthly(year: number, month: number, accountId?: string | null): Promise<MonthlySummary> {
+    const { data } = await api.get<MonthlySummary>('/stats/monthly', {
+      params: { year, month, account_id: accountId ?? undefined },
+    })
     return data
   },
   async trend(months = 6): Promise<MonthTrend[]> {

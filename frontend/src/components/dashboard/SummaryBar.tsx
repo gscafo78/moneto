@@ -1,18 +1,19 @@
-import { TrendingUp, TrendingDown, Wallet } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, PiggyBank } from 'lucide-react'
 
 interface Props {
   income: number
   expenses: number
   balance: number
+  realBalance: number
 }
 
 function fmt(n: number) {
   return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export default function SummaryBar({ income, expenses, balance }: Props) {
+export default function SummaryBar({ income, expenses, balance, realBalance }: Props) {
   return (
-    <div className="grid grid-cols-3 gap-2 px-4 py-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-4 py-3">
       <div className="bg-surface rounded-xl p-3">
         <div className="flex items-center gap-1.5 mb-1">
           <TrendingUp size={13} className="text-income" />
@@ -36,6 +37,16 @@ export default function SummaryBar({ income, expenses, balance }: Props) {
         </div>
         <p className={`font-semibold text-sm tabular-nums ${balance >= 0 ? 'text-income' : 'text-expense'}`}>
           € {fmt(balance)}
+        </p>
+      </div>
+
+      <div className="bg-surface rounded-xl p-3">
+        <div className="flex items-center gap-1.5 mb-1">
+          <PiggyBank size={13} className="text-white/50" />
+          <span className="text-[10px] text-white/40 uppercase tracking-wide font-medium">Saldo reale</span>
+        </div>
+        <p className={`font-semibold text-sm tabular-nums ${realBalance >= 0 ? 'text-income' : 'text-expense'}`}>
+          € {fmt(realBalance)}
         </p>
       </div>
     </div>

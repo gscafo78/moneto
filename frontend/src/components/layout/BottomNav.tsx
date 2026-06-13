@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { PieChart, ArrowLeftRight, Wallet, Tag } from 'lucide-react'
+import { PieChart, ArrowLeftRight, Wallet, Tag, Repeat, Settings } from 'lucide-react'
 
 const tabs = [
-  { to: '/',             Icon: PieChart,          label: 'Home'      },
-  { to: '/transactions', Icon: ArrowLeftRight,     label: 'Movimenti' },
-  { to: '/accounts',     Icon: Wallet,             label: 'Conti'     },
-  { to: '/categories',   Icon: Tag,                label: 'Categorie' },
+  { to: '/',             Icon: PieChart,          label: 'Home'        },
+  { to: '/transactions', Icon: ArrowLeftRight,     label: 'Movimenti'   },
+  { to: '/accounts',     Icon: Wallet,             label: 'Conti'       },
+  { to: '/categories',   Icon: Tag,                label: 'Categorie'   },
+  { to: '/recurring',    Icon: Repeat,             label: 'Ricorrenti'  },
+  { to: '/settings',     Icon: Settings,           label: 'Impostazioni'},
 ]
 
 export default function BottomNav() {
