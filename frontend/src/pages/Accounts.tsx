@@ -5,8 +5,12 @@ import { accountsApi, type Account } from '../api/accounts'
 import AccountCard from '../components/accounts/AccountCard'
 import { AccountsSkeleton } from '../components/ui/Skeleton'
 import AddAccountSheet from '../components/accounts/AddAccountSheet'
+import ImportCsvSheet from '../components/accounts/ImportCsvSheet'
+import ReconcileSheet from '../components/accounts/ReconcileSheet'
+import { useCurrency } from '../hooks/useCurrency'
 
 export default function Accounts() {
+  const cur = useCurrency()
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn:  accountsApi.list,
@@ -14,11 +18,16 @@ export default function Accounts() {
 
   const [sheetOpen,   setSheetOpen]   = useState(false)
   const [editAccount, setEditAccount] = useState<Account | undefined>()
+  const [importAccount, setImportAccount] = useState<Account | undefined>()
+  const [reconcileAccount, setReconcileAccount] = useState<Account | undefined>()
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
 
   function openAdd()  { setEditAccount(undefined); setSheetOpen(true)  }
   function openEdit(a: Account) { setEditAccount(a); setSheetOpen(true) }
+
+  function openImport(a: Account) { setSheetOpen(false); setImportAccount(a) }
+  function openReconcile(a: Account) { setSheetOpen(false); setReconcileAccount(a) }
 
   return (
     <>
@@ -31,7 +40,7 @@ export default function Accounts() {
           <div>
             <p className="text-xs text-white/40 uppercase tracking-wide">Patrimonio totale</p>
             <p className={`text-xl font-bold tabular-nums ${totalBalance >= 0 ? 'text-income' : 'text-expense'}`}>
-              € {totalBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+              {cur} {totalBalance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
             </p>
           </div>
         </div>
@@ -66,6 +75,20 @@ export default function Accounts() {
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         account={editAccount}
+        onImport={openImport}
+        onReconcile={openReconcile}
+      />
+
+      <ImportCsvSheet
+        open={!!importAccount}
+        onClose={() => setImportAccount(undefined)}
+        account={importAccount}
+      />
+
+      <ReconcileSheet
+        open={!!reconcileAccount}
+        onClose={() => setReconcileAccount(undefined)}
+        account={reconcileAccount}
       />
     </>
   )

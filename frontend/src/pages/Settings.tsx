@@ -1,11 +1,25 @@
 import { useState } from 'react'
-import { ShieldCheck, ShieldOff, LogOut, Mail, User as UserIcon } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ShieldCheck, ShieldOff, LogOut, Mail, User as UserIcon, Coins, Wallet } from 'lucide-react'
 import QRCode from 'react-qr-code'
-import { mfaApi } from '../api/auth'
+import { mfaApi, authApi } from '../api/auth'
+import { accountsApi } from '../api/accounts'
 import { useAuthStore } from '../store/authStore'
+import { CURRENCIES } from '../utils/currency'
 
 export default function Settings() {
   const { user, logout, refreshUser } = useAuthStore()
+  const qc = useQueryClient()
+
+  const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list })
+
+  const prefsMutation = useMutation({
+    mutationFn: authApi.updateMe,
+    onSuccess: async () => {
+      await refreshUser()
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+    },
+  })
 
   const [mode,   setMode]   = useState<'idle' | 'enable' | 'disable'>('idle')
   const [uri,    setUri]    = useState('')
@@ -93,6 +107,54 @@ export default function Settings() {
           <div>
             <p className="text-xs text-white/40">Email</p>
             <p className="text-sm font-medium">{user?.email}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Preferenze */}
+      <section className="bg-surface rounded-2xl p-4 space-y-4">
+        <h2 className="text-sm font-semibold text-white/80 uppercase tracking-wide">Preferenze</h2>
+
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center flex-shrink-0">
+            <Coins size={18} className="text-brand" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium mb-1.5">Valuta</p>
+            <select
+              value={user?.currency ?? 'EUR'}
+              onChange={e => prefsMutation.mutate({ currency: e.target.value })}
+              disabled={prefsMutation.isPending}
+              className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition disabled:opacity-50"
+            >
+              {CURRENCIES.map(c => (
+                <option key={c.code} value={c.code}>{c.symbol} — {c.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center flex-shrink-0">
+            <Wallet size={18} className="text-brand" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium mb-1.5">Conto predefinito (schermata iniziale)</p>
+            <select
+              value={user?.default_account_id ?? ''}
+              onChange={e => {
+                const id = e.target.value
+                if (id) prefsMutation.mutate({ default_account_id: id })
+                else prefsMutation.mutate({ clear_default_account: true })
+              }}
+              disabled={prefsMutation.isPending || accounts.length === 0}
+              className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition disabled:opacity-50"
+            >
+              <option value="">Tutti i conti</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
+              ))}
+            </select>
           </div>
         </div>
       </section>

@@ -4,6 +4,7 @@ import TransactionItem from './TransactionItem'
 import type { Transaction } from '../../api/transactions'
 import type { Category } from '../../api/categories'
 import type { Account } from '../../api/accounts'
+import { useCurrency } from '../../hooks/useCurrency'
 
 dayjs.locale('it')
 
@@ -33,6 +34,7 @@ function groupByDay(txs: Transaction[]): [string, Transaction[]][] {
 }
 
 export default function TransactionList({ transactions, categoryMap, accountMap, onDelete, onTap }: Props) {
+  const cur = useCurrency()
   const groups = groupByDay(transactions)
 
   return (
@@ -46,7 +48,7 @@ export default function TransactionList({ transactions, categoryMap, accountMap,
             </span>
             <span className="text-xs text-white/30 tabular-nums">
               {txs.reduce((s, t) => t.type === 'income' ? s + t.amount : s - t.amount, 0)
-                .toLocaleString('it-IT', { minimumFractionDigits: 2, signDisplay: 'always' })} €
+                .toLocaleString('it-IT', { minimumFractionDigits: 2, signDisplay: 'always' })} {cur}
             </span>
           </div>
 

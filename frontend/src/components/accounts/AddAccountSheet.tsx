@@ -5,15 +5,21 @@ import BottomSheet from '../ui/BottomSheet'
 import EmojiPicker from '../ui/EmojiPicker'
 import ColorPicker from '../ui/ColorPicker'
 import { accountsApi, type Account } from '../../api/accounts'
+import { useCurrency } from '../../hooks/useCurrency'
+import { useAuthStore } from '../../store/authStore'
 
 interface Props {
   open: boolean
   onClose: () => void
   account?: Account   // se presente → modalità edit
+  onImport?: (account: Account) => void
+  onReconcile?: (account: Account) => void
 }
 
-export default function AddAccountSheet({ open, onClose, account }: Props) {
+export default function AddAccountSheet({ open, onClose, account, onImport, onReconcile }: Props) {
   const qc = useQueryClient()
+  const cur = useCurrency()
+  const userCurrency = useAuthStore(s => s.user?.currency) || 'EUR'
   const isEdit = !!account
 
   const [name,    setName]    = useState('')
@@ -38,7 +44,7 @@ export default function AddAccountSheet({ open, onClose, account }: Props) {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['accounts'] })
 
   const createMut = useMutation({
-    mutationFn: () => accountsApi.create({ name, icon, color, balance: parseFloat(balance) || 0, currency: 'EUR' }),
+    mutationFn: () => accountsApi.create({ name, icon, color, balance: parseFloat(balance) || 0, currency: userCurrency }),
     onSuccess: () => { invalidate(); onClose() },
   })
 
@@ -101,7 +107,7 @@ export default function AddAccountSheet({ open, onClose, account }: Props) {
         {/* Saldo iniziale (solo creazione) */}
         {!isEdit && (
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Saldo iniziale (€)</label>
+            <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Saldo iniziale ({cur})</label>
             <input
               type="number"
               inputMode="decimal"
@@ -133,6 +139,26 @@ export default function AddAccountSheet({ open, onClose, account }: Props) {
 
         {tab === 'emoji' && <EmojiPicker value={icon} onChange={e => { setIcon(e); setTab(null) }} />}
         {tab === 'color' && <ColorPicker value={color} onChange={c => { setColor(c); setTab(null) }} />}
+
+        {/* Importa / Riconcilia (solo modifica) */}
+        {isEdit && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onImport?.(account!)}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm bg-surface-overlay text-white/70 hover:text-white transition"
+            >
+              📄 Importa estratto conto
+            </button>
+            <button
+              type="button"
+              onClick={() => onReconcile?.(account!)}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm bg-surface-overlay text-white/70 hover:text-white transition"
+            >
+              ⚖️ Riconcilia saldo
+            </button>
+          </div>
+        )}
 
         <button
           onClick={handleSave}

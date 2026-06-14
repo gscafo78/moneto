@@ -1,4 +1,5 @@
 import { TrendingUp, TrendingDown, Wallet, PiggyBank } from 'lucide-react'
+import { useCurrency } from '../../hooks/useCurrency'
 
 interface Props {
   income: number
@@ -12,6 +13,7 @@ function fmt(n: number) {
 }
 
 export default function SummaryBar({ income, expenses, balance, realBalance }: Props) {
+  const cur = useCurrency()
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-4 py-3">
       <div className="bg-surface rounded-xl p-3">
@@ -19,7 +21,7 @@ export default function SummaryBar({ income, expenses, balance, realBalance }: P
           <TrendingUp size={13} className="text-income" />
           <span className="text-[10px] text-white/40 uppercase tracking-wide font-medium">Entrate</span>
         </div>
-        <p className="text-income font-semibold text-sm tabular-nums">€ {fmt(income)}</p>
+        <p className="text-income font-semibold text-sm tabular-nums">{cur} {fmt(income)}</p>
       </div>
 
       <div className="bg-surface rounded-xl p-3">
@@ -27,7 +29,7 @@ export default function SummaryBar({ income, expenses, balance, realBalance }: P
           <TrendingDown size={13} className="text-expense" />
           <span className="text-[10px] text-white/40 uppercase tracking-wide font-medium">Uscite</span>
         </div>
-        <p className="text-expense font-semibold text-sm tabular-nums">€ {fmt(expenses)}</p>
+        <p className="text-expense font-semibold text-sm tabular-nums">{cur} {fmt(expenses)}</p>
       </div>
 
       <div className="bg-surface rounded-xl p-3">
@@ -36,7 +38,7 @@ export default function SummaryBar({ income, expenses, balance, realBalance }: P
           <span className="text-[10px] text-white/40 uppercase tracking-wide font-medium">Saldo</span>
         </div>
         <p className={`font-semibold text-sm tabular-nums ${balance >= 0 ? 'text-income' : 'text-expense'}`}>
-          € {fmt(balance)}
+          {cur} {fmt(balance)}
         </p>
       </div>
 
@@ -46,7 +48,7 @@ export default function SummaryBar({ income, expenses, balance, realBalance }: P
           <span className="text-[10px] text-white/40 uppercase tracking-wide font-medium">Saldo reale</span>
         </div>
         <p className={`font-semibold text-sm tabular-nums ${realBalance >= 0 ? 'text-income' : 'text-expense'}`}>
-          € {fmt(realBalance)}
+          {cur} {fmt(realBalance)}
         </p>
       </div>
     </div>

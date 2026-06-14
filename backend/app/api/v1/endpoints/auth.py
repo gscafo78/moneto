@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.models.account import Account
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -49,8 +50,16 @@ class UserOut(BaseModel):
     email: str
     name: str | None
     totp_enabled: bool = False
+    currency: str = "EUR"
+    default_account_id: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    currency: str | None = None
+    default_account_id: str | None = None
+    clear_default_account: bool = False
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -134,10 +143,45 @@ async def refresh_token(body: RefreshRequest):
     )
 
 
+def _user_out(user: User) -> UserOut:
+    return UserOut(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        totp_enabled=user.totp_enabled,
+        currency=user.currency,
+        default_account_id=str(user.default_account_id) if user.default_account_id else None,
+    )
+
+
 @router.get("/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)):
-    return UserOut(
-        id=str(current_user.id),
-        email=current_user.email,
-        name=current_user.name,
-    )
+    return _user_out(current_user)
+
+
+@router.patch("/me", response_model=UserOut)
+async def update_me(
+    data: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if data.currency is not None:
+        currency = data.currency.strip().upper()
+        if len(currency) != 3:
+            raise HTTPException(status_code=400, detail="Codice valuta non valido")
+        current_user.currency = currency
+
+    if data.clear_default_account:
+        current_user.default_account_id = None
+    elif data.default_account_id is not None:
+        result = await db.execute(
+            select(Account).where(Account.id == data.default_account_id, Account.user_id == current_user.id)
+        )
+        account = result.scalar_one_or_none()
+        if not account:
+            raise HTTPException(status_code=404, detail="Conto non trovato")
+        current_user.default_account_id = account.id
+
+    await db.commit()
+    await db.refresh(current_user)
+    return _user_out(current_user)

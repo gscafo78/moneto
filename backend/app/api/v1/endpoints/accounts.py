@@ -1,8 +1,12 @@
+from decimal import Decimal
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
 from app.models.account import Account
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.core.security import get_current_user
 from pydantic import BaseModel
@@ -86,3 +90,71 @@ async def delete_account(account_id: str, db: AsyncSession = Depends(get_db), us
     account = await _get_account(db, account_id, user.id)
     account.is_active = False
     await db.commit()
+
+
+class ReconcileRequest(BaseModel):
+    real_balance: float
+    date: Optional[datetime] = None
+
+
+class TransactionOut(BaseModel):
+    id: str
+    account_id: str
+    category_id: Optional[str]
+    amount: float
+    type: str
+    note: Optional[str]
+    date: datetime
+
+
+class ReconcileResponse(BaseModel):
+    account: AccountOut
+    transaction: Optional[TransactionOut]
+    difference: float
+
+
+def _tx_out(t: Transaction) -> TransactionOut:
+    return TransactionOut(
+        id=str(t.id),
+        account_id=str(t.account_id),
+        category_id=str(t.category_id) if t.category_id else None,
+        amount=float(t.amount),
+        type=t.type,
+        note=t.note,
+        date=t.date,
+    )
+
+
+@router.post("/{account_id}/reconcile", response_model=ReconcileResponse)
+async def reconcile_account(
+    account_id: str,
+    data: ReconcileRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    account = await _get_account(db, account_id, user.id)
+
+    real_balance = Decimal(str(data.real_balance))
+    diff = real_balance - account.balance
+
+    if diff == 0:
+        return ReconcileResponse(account=_out(account), transaction=None, difference=0)
+
+    tx = Transaction(
+        user_id=user.id,
+        account_id=account.id,
+        category_id=None,
+        amount=abs(diff),
+        type="income" if diff > 0 else "expense",
+        note="Rettifica saldo (riconciliazione)",
+        date=data.date or datetime.utcnow(),
+        is_reconciliation=True,
+    )
+    db.add(tx)
+    account.balance = real_balance
+
+    await db.commit()
+    await db.refresh(account)
+    await db.refresh(tx)
+
+    return ReconcileResponse(account=_out(account), transaction=_tx_out(tx), difference=float(diff))

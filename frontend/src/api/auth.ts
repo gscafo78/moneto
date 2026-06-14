@@ -13,6 +13,14 @@ export interface UserOut {
   email: string
   name: string | null
   totp_enabled: boolean
+  currency: string
+  default_account_id: string | null
+}
+
+export interface UserUpdate {
+  currency?: string
+  default_account_id?: string | null
+  clear_default_account?: boolean
 }
 
 export const authApi = {
@@ -38,6 +46,11 @@ export const authApi = {
 
   async me(): Promise<UserOut> {
     const { data } = await api.get<UserOut>('/auth/me')
+    return data
+  },
+
+  async updateMe(payload: UserUpdate): Promise<UserOut> {
+    const { data } = await api.patch<UserOut>('/auth/me', payload)
     return data
   },
 

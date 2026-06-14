@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ReceiptText } from 'lucide-react'
 import { useMonthlyStats } from '../hooks/useMonthlyStats'
 import { useAccountStore } from '../store/accountStore'
+import { useAuthStore } from '../store/authStore'
 import { accountsApi } from '../api/accounts'
 import SummaryBar from '../components/dashboard/SummaryBar'
 import SpendingChart from '../components/dashboard/SpendingChart'
@@ -19,6 +20,17 @@ export default function Dashboard() {
   const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list })
   const selectedAccountId = useAccountStore(s => s.selectedAccountId)
   const setSelectedAccountId = useAccountStore(s => s.setSelectedAccountId)
+  const defaultAccountId = useAuthStore(s => s.user?.default_account_id)
+
+  // Applica il conto predefinito impostato dall'utente al primo caricamento
+  const appliedDefault = useRef(false)
+  useEffect(() => {
+    if (appliedDefault.current) return
+    if (!defaultAccountId) return
+    if (!accounts.some(a => a.id === defaultAccountId)) return
+    appliedDefault.current = true
+    setSelectedAccountId(defaultAccountId)
+  }, [defaultAccountId, accounts, setSelectedAccountId])
 
   const summary = data ?? { income: 0, expenses: 0, balance: 0, real_balance: 0, by_category: [] }
 

@@ -13,6 +13,7 @@ import TransactionList from '../components/transactions/TransactionList'
 import AddTransactionButton from '../components/ui/AddTransactionButton'
 import AddTransactionSheet from '../components/transactions/AddTransactionSheet'
 import BottomSheet from '../components/ui/BottomSheet'
+import { useCurrency } from '../hooks/useCurrency'
 
 dayjs.locale('it')
 
@@ -151,6 +152,7 @@ function DetailContent({ tx, categoryMap, accountMap, onClose }: {
   accountMap:  Record<string, any>
   onClose: () => void
 }) {
+  const cur   = useCurrency()
   const cat   = tx.category_id ? categoryMap[tx.category_id] : null
   const acc   = accountMap[tx.account_id]
   const sign  = tx.type === 'income' ? '+' : '-'
@@ -180,7 +182,7 @@ function DetailContent({ tx, categoryMap, accountMap, onClose }: {
           {icon}
         </div>
         <span className={`text-3xl font-bold tabular-nums ${color}`}>
-          {sign}€ {tx.amount.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+          {sign}{cur} {tx.amount.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
         </span>
       </div>
 

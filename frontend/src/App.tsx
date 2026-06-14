@@ -9,6 +9,7 @@ import Transactions from './pages/Transactions'
 import Accounts from './pages/Accounts'
 import Categories from './pages/Categories'
 import Recurring from './pages/Recurring'
+import Report from './pages/Report'
 import Settings from './pages/Settings'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="accounts"     element={<Accounts />} />
         <Route path="categories"   element={<Categories />} />
         <Route path="recurring"    element={<Recurring />} />
+        <Route path="report"       element={<Report />} />
         <Route path="settings"     element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

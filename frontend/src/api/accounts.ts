@@ -1,4 +1,5 @@
 import { api } from './client'
+import type { Transaction } from './transactions'
 
 export interface Account {
   id: string
@@ -7,6 +8,12 @@ export interface Account {
   color: string
   balance: number
   currency: string
+}
+
+export interface ReconcileResponse {
+  account: Account
+  transaction: Transaction | null
+  difference: number
 }
 
 export const accountsApi = {
@@ -24,5 +31,9 @@ export const accountsApi = {
   },
   async remove(id: string): Promise<void> {
     await api.delete(`/accounts/${id}`)
+  },
+  async reconcile(id: string, body: { real_balance: number; date?: string }): Promise<ReconcileResponse> {
+    const { data } = await api.post<ReconcileResponse>(`/accounts/${id}/reconcile`, body)
+    return data
   },
 }

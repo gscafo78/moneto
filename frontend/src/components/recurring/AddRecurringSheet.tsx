@@ -9,6 +9,7 @@ import { useNumpad, NUMPAD_KEYS } from '../../hooks/useNumpad'
 import { recurringApi, type RecurringFrequency, type RecurringTransaction } from '../../api/recurring'
 import { categoriesApi } from '../../api/categories'
 import { accountsApi } from '../../api/accounts'
+import { useCurrency } from '../../hooks/useCurrency'
 
 interface Props {
   open: boolean
@@ -34,6 +35,7 @@ function fmtAmount(val: string) {
 
 export default function AddRecurringSheet({ open, onClose, recurring }: Props) {
   const qc = useQueryClient()
+  const cur = useCurrency()
   const isEdit = !!recurring
   const { val, amount, press, reset } = useNumpad()
 
@@ -182,7 +184,7 @@ export default function AddRecurringSheet({ open, onClose, recurring }: Props) {
       <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-2">
         <FieldRow
           label="Importo"
-          value={amount > 0 ? `€ ${fmtAmount(val)}` : undefined}
+          value={amount > 0 ? `${cur} ${fmtAmount(val)}` : undefined}
           placeholder="Inserisci importo"
           onClick={() => openField('amount')}
         />
@@ -262,7 +264,7 @@ export default function AddRecurringSheet({ open, onClose, recurring }: Props) {
       >
         <div className="text-center py-3">
           <span className={`text-4xl font-bold tabular-nums ${type === 'expense' ? 'text-expense' : 'text-income'}`}>
-            € {fmtAmount(draft.val)}
+            {cur} {fmtAmount(draft.val)}
           </span>
         </div>
         <div className="grid grid-cols-3 gap-1.5 mb-2">

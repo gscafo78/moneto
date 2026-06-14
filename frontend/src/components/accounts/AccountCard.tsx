@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react'
 import type { Account } from '../../api/accounts'
+import { currencySymbol } from '../../utils/currency'
 
 interface Props {
   account: Account
@@ -31,7 +32,7 @@ export default function AccountCard({ account, onEdit }: Props) {
       {/* Balance */}
       <div className="text-right flex-shrink-0 flex items-center gap-2">
         <span className={`text-base font-bold tabular-nums ${balColor}`}>
-          € {account.balance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+          {currencySymbol(account.currency)} {account.balance.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
         </span>
         <ChevronRight size={16} className="text-white/20" />
       </div>

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, mfa, accounts, categories, transactions, stats, recurring
+from app.api.v1.endpoints import auth, mfa, accounts, categories, transactions, stats, recurring, csv_import
 
 router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -9,3 +9,4 @@ router.include_router(categories.router, prefix="/categories", tags=["categories
 router.include_router(transactions.router, prefix="/transactions", tags=["transactions"])
 router.include_router(stats.router, prefix="/stats", tags=["stats"])
 router.include_router(recurring.router, prefix="/recurring", tags=["recurring"])
+router.include_router(csv_import.router, prefix="/import", tags=["import"])

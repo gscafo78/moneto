@@ -16,5 +16,5 @@ class Account(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    user = relationship("User", back_populates="accounts")
+    user = relationship("User", back_populates="accounts", foreign_keys=[user_id])
     transactions = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")

@@ -9,6 +9,7 @@ import { useNumpad, NUMPAD_KEYS } from '../../hooks/useNumpad'
 import { transactionsApi, type TxType } from '../../api/transactions'
 import { categoriesApi } from '../../api/categories'
 import { accountsApi } from '../../api/accounts'
+import { useCurrency } from '../../hooks/useCurrency'
 
 interface Props {
   open: boolean
@@ -28,6 +29,7 @@ function fmtAmount(val: string) {
 
 export default function AddTransactionSheet({ open, onClose, year, month }: Props) {
   const qc = useQueryClient()
+  const cur = useCurrency()
   const { val, amount, press, reset } = useNumpad()
 
   const [type, setType]     = useState<TxType>('expense')
@@ -118,7 +120,7 @@ export default function AddTransactionSheet({ open, onClose, year, month }: Prop
       <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-2">
         <FieldRow
           label="Importo"
-          value={amount > 0 ? `€ ${fmtAmount(val)}` : undefined}
+          value={amount > 0 ? `${cur} ${fmtAmount(val)}` : undefined}
           placeholder="Inserisci importo"
           onClick={() => openField('amount')}
         />
@@ -186,7 +188,7 @@ export default function AddTransactionSheet({ open, onClose, year, month }: Prop
       >
         <div className="text-center py-3">
           <span className={`text-4xl font-bold tabular-nums ${type === 'expense' ? 'text-expense' : type === 'income' ? 'text-income' : 'text-brand'}`}>
-            € {fmtAmount(draft.val)}
+            {cur} {fmtAmount(draft.val)}
           </span>
         </div>
         <div className="grid grid-cols-3 gap-1.5 mb-2">

@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import type { CategoryStat } from '../../api/stats'
+import { useCurrency } from '../../hooks/useCurrency'
 
 interface Props {
   data: CategoryStat[]
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function SpendingChart({ data, selectedId, onSelect }: Props) {
+  const cur = useCurrency()
   if (data.length === 0) return null
 
   const total = data.reduce((s, c) => s + c.total, 0)
@@ -52,7 +54,7 @@ export default function SpendingChart({ data, selectedId, onSelect }: Props) {
                 Uscite
               </tspan>
               <tspan x="50%" dy="1.4em" fill="white" fontSize={17} fontWeight="600">
-                {`€ ${total.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`}
+                {`${cur} ${total.toLocaleString('it-IT', { maximumFractionDigits: 0 })}`}
               </tspan>
             </text>
 
@@ -64,7 +66,7 @@ export default function SpendingChart({ data, selectedId, onSelect }: Props) {
                 color: '#fff',
                 fontSize: 13,
               }}
-              formatter={(v: number) => [`€ ${v.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`, '']}
+              formatter={(v: number) => [`${cur} ${v.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`, '']}
               itemStyle={{ color: '#fff' }}
             />
           </PieChart>

@@ -1,4 +1,5 @@
 import type { CategoryStat } from '../../api/stats'
+import { useCurrency } from '../../hooks/useCurrency'
 
 interface Props {
   data: CategoryStat[]
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export default function CategoryList({ data, selectedId, onSelect }: Props) {
+  const cur = useCurrency()
   const max   = Math.max(...data.map(c => c.total), 1)
   const shown = selectedId ? data.filter(c => c.category_id === selectedId) : data
 
@@ -30,7 +32,7 @@ export default function CategoryList({ data, selectedId, onSelect }: Props) {
               <div className="flex items-baseline justify-between mb-1.5">
                 <span className="text-sm font-medium text-white truncate">{cat.name}</span>
                 <span className="text-sm font-semibold text-white/80 tabular-nums ml-2 flex-shrink-0">
-                  € {cat.total.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                  {cur} {cat.total.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="h-1 bg-white/10 rounded-full overflow-hidden">

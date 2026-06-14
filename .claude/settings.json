@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s http://localhost/api/v1/auth/registration-open)",
+      "Bash(find / -iname \"*movimenti*\" -not -path \"/proc/*\")",
+      "Bash(find / -iname \"*mediobanca*\" -not -path \"/proc/*\")",
+      "Bash(grep -n \"^## Milestone 14\\\\|^---$\\\\|^## Struttura\" /opt/moneto/ROADMAP.md)"
+    ]
+  }
+}

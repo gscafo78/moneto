@@ -684,6 +684,154 @@ ricorrenze non ancora addebitate.
 
 ---
 
+## Milestone 13 — Preferenze utente (valuta, conto predefinito) + fix UI mobile ✅
+
+**Obiettivo**: permettere all'utente di scegliere la valuta visualizzata nell'app e un
+conto predefinito da mostrare all'apertura della Dashboard, e risolvere due problemi di
+usabilità su smartphone nei bottom sheet.
+
+### Backend
+- Modello `User` (`app/models/user.py`): nuovi campi `currency` (default `EUR`) e
+  `default_account_id` (FK opzionale verso `accounts.id`, `ON DELETE SET NULL`)
+- Migration `004_user_prefs` — `ALTER TABLE users ADD COLUMN currency ...` e
+  `default_account_id ...`
+- `relationship` su `User`/`Account` resi espliciti con `foreign_keys` per evitare
+  l'ambiguità introdotta dal nuovo FK `users.default_account_id → accounts.id`
+- `app/api/v1/endpoints/auth.py`:
+  - `UserOut` include ora `currency` e `default_account_id`
+  - nuovo `PATCH /api/v1/auth/me` — aggiorna `currency` e/o `default_account_id`
+    (valida che il conto appartenga all'utente; `clear_default_account: true` per
+    tornare a "Tutti i conti")
+
+### Frontend
+- `utils/currency.ts` — elenco valute supportate (EUR, USD, GBP, CHF, JPY) con simbolo
+- `hooks/useCurrency.ts` — legge `user.currency` da `authStore` e restituisce il simbolo
+- Tutti i punti dell'app che mostravano `€` fisso (Dashboard, Conti, Movimenti,
+  Ricorrenti e relativi bottom sheet) usano ora `useCurrency()`; `AccountCard` mostra il
+  simbolo della valuta del singolo conto (`account.currency`)
+- Nuove transazioni/conti creati usano la valuta preferita dell'utente
+- `pages/Settings.tsx` — nuova sezione **Preferenze**:
+  - select Valuta → `PATCH /auth/me { currency }`
+  - select "Conto predefinito (schermata iniziale)" → `PATCH /auth/me { default_account_id }`
+    (opzione "Tutti i conti" → `clear_default_account: true`)
+- `pages/Dashboard.tsx` — al primo caricamento, se l'utente ha un conto predefinito
+  impostato, lo seleziona automaticamente nel filtro conti
+
+### Fix UI mobile (bottom sheet)
+- `components/ui/AddTransactionButton.tsx` — FAB `+` alzato (`bottom-20` → `bottom-28`)
+  per non sovrapporsi alla bottom nav
+- `components/ui/BottomSheet.tsx` — backdrop e pannello portati a `z-[55]`/`z-[60]`
+  (sopra la `BottomNav`, che è `z-50`): risolve il problema per cui il bottone "Salva"
+  in fondo ai bottom sheet (nuova transazione, ricorrenza, ecc.) era coperto dalla
+  bottom nav e non era cliccabile su smartphone
+
+**Criteri di completamento**:
+- `alembic upgrade head` applica `004_user_prefs` senza errori, backend si avvia senza
+  errori di mapping SQLAlchemy
+- Cambiando la valuta in Impostazioni, tutti gli importi nell'app mostrano il nuovo
+  simbolo
+- Impostando un conto predefinito, la Dashboard lo seleziona automaticamente al
+  successivo accesso
+- Su smartphone il FAB `+` e il bottone "Salva" dei bottom sheet sono sempre
+  raggiungibili, senza essere coperti dalla bottom nav
+
+---
+
+## Milestone 14 — Import CSV Mediobanca Premier + riconciliazione conto ✅
+
+**Obiettivo**: permettere l'import in blocco dei movimenti da un estratto conto CSV di
+Mediobanca Premier (con categorizzazione automatica e deduplica) e una funzione di
+riconciliazione del saldo (ispirata a Firefly III) per allineare il saldo del conto al
+saldo reale della banca.
+
+### Backend
+- Modello `Transaction` (`app/models/transaction.py`): nuovi campi `import_hash`
+  (`String(64)`, nullable) e `is_reconciliation` (`Boolean`, default `false`)
+- Migration `005_csv_import_reconciliation` — aggiunge le due colonne e crea l'indice
+  univoco parziale `ix_tx_account_import_hash ON transactions(account_id, import_hash)
+  WHERE import_hash IS NOT NULL` per evitare doppioni
+- `app/services/csv_import.py`:
+  - `decode_csv_bytes` — decodifica robusta (utf-8-sig → cp1252 → latin-1)
+  - `parse_italian_amount` / `parse_italian_date` — formati numerici/date italiani
+  - `CATEGORY_KEYWORDS` + `suggest_category_name` — suggerimento categoria basato su
+    parole chiave nella descrizione del movimento (farmacia, supermercati, ristoranti,
+    Amazon, utenze, stipendio, prelievi, ecc.)
+  - `compute_import_hash` — hash SHA256 di `(account_id, data, importo, descrizione)`
+    usato per la deduplica
+  - `parse_mediobanca_csv` — parsing del CSV (delimitatore `;`, colonne `Data
+    contabile`/`Data valuta`, `Entrate`/`Uscite`, `Tipologia`, `Divisa`), con elenco di
+    warning per righe malformate o scartate
+- `app/api/v1/endpoints/csv_import.py` (router `/api/v1/import`):
+  - `POST /import/mediobanca/preview` — form-data (`account_id`, `file`), nessuna
+    scrittura su DB: ritorna l'elenco delle righe con categoria suggerita, flag
+    `is_duplicate` (basato su `import_hash` già presenti per il conto) e
+    `currency_mismatch` (valuta riga ≠ valuta conto)
+  - `POST /import/mediobanca/confirm` — crea le `Transaction` per le righe incluse
+    (ri-controllando i duplicati lato server), aggiorna `account.balance` con la stessa
+    logica `Decimal` usata per le transazioni manuali, un solo commit finale
+- `app/api/v1/endpoints/accounts.py`:
+  - nuovo `POST /accounts/{id}/reconcile` — riceve `real_balance` (e opzionalmente
+    `date`), calcola la differenza col saldo Moneto e, se diversa da zero, crea una
+    `Transaction` di rettifica (`is_reconciliation=true`, nota "Rettifica saldo
+    (riconciliazione)") e aggiorna `account.balance` al valore reale. Le transazioni di
+    rettifica contano come transazioni normali nelle statistiche mensili.
+
+### Frontend
+- `api/csvImport.ts` — `importApi.previewMediobanca` / `confirmMediobanca`
+- `api/accounts.ts` — `accountsApi.reconcile(id, { real_balance, date })`
+- `components/accounts/ImportCsvSheet.tsx` — bottom sheet a due fasi: selezione file CSV
+  → anteprima righe (categoria modificabile, checkbox di inclusione, badge "Duplicato" /
+  "Valuta diversa") → conferma import con riepilogo
+- `components/accounts/ReconcileSheet.tsx` — bottom sheet con saldo attuale, input saldo
+  reale e data, differenza calcolata live, conferma che crea la rettifica
+- `components/accounts/AddAccountSheet.tsx` — in modalità modifica, due nuovi bottoni
+  "📄 Importa estratto conto" e "⚖️ Riconcilia saldo"
+- `pages/Accounts.tsx` — stato per aprire `ImportCsvSheet` / `ReconcileSheet` dal conto
+  selezionato
+
+**Criteri di completamento**:
+- `alembic upgrade head` applica `005_csv_import_reconciliation` senza errori, backend
+  si avvia senza errori di mapping
+- Caricando l'estratto conto Mediobanca di esempio si vede l'anteprima con date, importi
+  e categorie suggerite corrette
+- Confermando l'import, il saldo del conto si aggiorna e le transazioni compaiono nei
+  Movimenti con la descrizione originale come nota
+- Ricaricando lo stesso file, le righe già importate sono marcate come duplicate e non
+  vengono reimportate
+- La riconciliazione crea una transazione di rettifica con segno corretto e porta il
+  saldo del conto al valore inserito
+
+---
+
+## Milestone 9b — Report e grafici trend ✅
+
+**Obiettivo**: nuova pagina "Report" con l'andamento mensile di entrate/uscite, il saldo
+nel tempo e l'export CSV dei movimenti del mese.
+
+### Backend
+- Nessuna modifica: riusa `GET /api/v1/stats/trend?months=N` (già presente dalla
+  Milestone 2) e `GET /api/v1/transactions/` per l'export.
+
+### Frontend
+- `components/report/TrendChart.tsx` — grafico a barre (Recharts) entrate/uscite per
+  mese, con selettore di intervallo 3/6/12 mesi
+- `components/report/BalanceTrendChart.tsx` — grafico a linee del saldo totale a fine
+  mese, calcolato a ritroso a partire dal saldo attuale dei conti sottraendo il netto
+  (entrate − uscite) di ciascun mese successivo
+- `utils/exportCsv.ts` — genera e scarica un CSV (con BOM UTF-8, delimitatore `;`)
+- `pages/Report.tsx` — pagina con i due grafici e un bottone "Esporta movimenti" che
+  scarica il CSV del mese selezionato (data, descrizione, categoria, conto, tipo,
+  importo)
+- Nuova voce "Report" in `BottomNav` e `Sidebar`, nuova rotta `/report`
+
+**Criteri di completamento**:
+- La pagina Report mostra il grafico a barre entrate/uscite e il grafico a linee del
+  saldo per l'intervallo selezionato (3/6/12 mesi)
+- Il bottone "Esporta movimenti" scarica un CSV con i movimenti del mese corrente,
+  apribile correttamente in Excel/LibreOffice (accenti italiani inclusi)
+
+---
+
 ## Struttura file finale attesa
 
 ```

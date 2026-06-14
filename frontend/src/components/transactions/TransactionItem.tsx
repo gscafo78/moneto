@@ -3,6 +3,7 @@ import { Trash2 } from 'lucide-react'
 import type { Transaction } from '../../api/transactions'
 import type { Category } from '../../api/categories'
 import type { Account } from '../../api/accounts'
+import { useCurrency } from '../../hooks/useCurrency'
 
 interface Props {
   tx: Transaction
@@ -16,6 +17,7 @@ const REVEAL = -76
 const THRESHOLD = 40
 
 export default function TransactionItem({ tx, categoryMap, accountMap, onDelete, onTap }: Props) {
+  const cur = useCurrency()
   const [swiped, setSwiped] = useState(false)
   const [live,   setLive]   = useState(0)      // offset during drag
   const [isDragging, setDragging] = useState(false)
@@ -26,7 +28,7 @@ export default function TransactionItem({ tx, categoryMap, accountMap, onDelete,
 
   const sign    = tx.type === 'income' ? '+' : '-'
   const color   = tx.type === 'income' ? 'text-income' : tx.type === 'expense' ? 'text-expense' : 'text-white/70'
-  const amtStr  = `${sign}€ ${tx.amount.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
+  const amtStr  = `${sign}${cur} ${tx.amount.toLocaleString('it-IT', { minimumFractionDigits: 2 })}`
   const icon    = cat?.icon ?? (tx.type === 'income' ? '💰' : tx.type === 'transfer' ? '🔄' : '💸')
   const label   = cat?.name ?? (tx.type === 'income' ? 'Entrata' : tx.type === 'transfer' ? 'Trasferimento' : 'Spesa')
 
