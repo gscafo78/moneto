@@ -150,12 +150,6 @@ async def confirm_mediobanca(
             is_reconciliation=False,
         )
         db.add(tx)
-
-        if row.type == "income":
-            account.balance += amount
-        else:
-            account.balance -= amount
-
         imported += 1
 
     await db.commit()

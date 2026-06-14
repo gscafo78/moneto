@@ -15,6 +15,8 @@ export interface UserOut {
   totp_enabled: boolean
   currency: string
   default_account_id: string | null
+  email_verified: boolean
+  is_admin: boolean
 }
 
 export interface UserUpdate {
@@ -56,6 +58,76 @@ export const authApi = {
 
   async registrationOpen(): Promise<{ open: boolean }> {
     const { data } = await api.get<{ open: boolean }>('/auth/registration-open')
+    return data
+  },
+
+  async forgotPassword(email: string): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/forgot-password', { email })
+    return data
+  },
+
+  async resetPassword(token: string, new_password: string): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/reset-password', { token, new_password })
+    return data
+  },
+
+  async verifyEmail(token: string): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/verify-email', { token })
+    return data
+  },
+
+  async resendVerification(): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/resend-verification')
+    return data
+  },
+
+  async changePassword(current_password: string, new_password: string): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/change-password', { current_password, new_password })
+    return data
+  },
+}
+
+export interface SmtpSettings {
+  smtp_host: string | null
+  smtp_port: number | null
+  smtp_user: string | null
+  smtp_from: string | null
+  smtp_tls: boolean | null
+  smtp_password_set: boolean
+}
+
+export interface SmtpSettingsUpdate {
+  smtp_host?: string | null
+  smtp_port?: number | null
+  smtp_user?: string | null
+  smtp_password?: string | null
+  smtp_from?: string | null
+  smtp_tls?: boolean | null
+}
+
+export const adminApi = {
+  async getRegistrationSetting(): Promise<{ allow_registration: boolean }> {
+    const { data } = await api.get<{ allow_registration: boolean }>('/auth/admin/registration')
+    return data
+  },
+
+  async setRegistrationSetting(allow_registration: boolean): Promise<{ allow_registration: boolean }> {
+    const { data } = await api.patch<{ allow_registration: boolean }>('/auth/admin/registration', { allow_registration })
+    return data
+  },
+
+  async getSmtpSettings(): Promise<SmtpSettings> {
+    const { data } = await api.get<SmtpSettings>('/auth/admin/smtp')
+    return data
+  },
+
+  async setSmtpSettings(payload: SmtpSettingsUpdate): Promise<SmtpSettings> {
+    const { data } = await api.patch<SmtpSettings>('/auth/admin/smtp', payload)
+    return data
+  },
+
+  async testSmtp(): Promise<{ detail: string }> {
+    const { data } = await api.post<{ detail: string }>('/auth/admin/smtp/test')
     return data
   },
 }

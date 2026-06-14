@@ -10,26 +10,20 @@ interface Props {
   account?: Account
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10)
-}
-
 export default function ReconcileSheet({ open, onClose, account }: Props) {
   const qc = useQueryClient()
   const cur = currencySymbol(account?.currency)
 
   const [realBalance, setRealBalance] = useState('0')
-  const [date, setDate] = useState(todayStr())
   const [result, setResult] = useState<ReconcileResponse | null>(null)
 
   useEffect(() => {
     if (account) setRealBalance(String(account.balance))
-    setDate(todayStr())
     setResult(null)
   }, [account, open])
 
   const reconcileMut = useMutation({
-    mutationFn: () => accountsApi.reconcile(account!.id, { real_balance: parseFloat(realBalance) || 0, date: `${date}T12:00:00Z` }),
+    mutationFn: () => accountsApi.reconcile(account!.id, { real_balance: parseFloat(realBalance) || 0 }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
       qc.invalidateQueries({ queryKey: ['transactions'] })
@@ -86,16 +80,6 @@ export default function ReconcileSheet({ open, onClose, account }: Props) {
                 inputMode="decimal"
                 value={realBalance}
                 onChange={e => setRealBalance(e.target.value)}
-                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Data rettifica</label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
                 className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60"
               />
             </div>

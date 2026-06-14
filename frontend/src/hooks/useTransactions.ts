@@ -4,14 +4,17 @@ import { useDateStore } from '../store/dateStore'
 import { transactionsApi } from '../api/transactions'
 
 export function useTransactions() {
-  const date  = useDateStore(s => s.date)
-  const year  = dayjs(date).year()
-  const month = dayjs(date).month() + 1
+  const { getRange } = useDateStore()
+  const { start, end } = getRange()
+  const startStr = dayjs(start).format('YYYY-MM-DD')
+  const endStr = dayjs(end).format('YYYY-MM-DD')
+  const year = dayjs(start).year()
+  const month = dayjs(start).month() + 1
 
   const query = useQuery({
-    queryKey: ['transactions', year, month],
-    queryFn:  () => transactionsApi.list(year, month),
+    queryKey: ['transactions', startStr, endStr],
+    queryFn: () => transactionsApi.listRange(startStr, endStr),
   })
 
-  return { ...query, year, month }
+  return { ...query, start, end, year, month }
 }

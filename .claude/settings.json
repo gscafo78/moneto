@@ -4,7 +4,20 @@
       "Bash(curl -s http://localhost/api/v1/auth/registration-open)",
       "Bash(find / -iname \"*movimenti*\" -not -path \"/proc/*\")",
       "Bash(find / -iname \"*mediobanca*\" -not -path \"/proc/*\")",
-      "Bash(grep -n \"^## Milestone 14\\\\|^---$\\\\|^## Struttura\" /opt/moneto/ROADMAP.md)"
+      "Bash(grep -n \"^## Milestone 14\\\\|^---$\\\\|^## Struttura\" /opt/moneto/ROADMAP.md)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/docs)",
+      "Bash(curl -s http://localhost:8000/api/v1/auth/registration-open)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8000/api/v1/auth/admin/registration)",
+      "Bash(curl -s -X POST http://localhost:8000/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"giovanni.scafetta@gmail.com\",\"password\":\"wrongpass\"}' -w \"\\\\n%{http_code}\\\\n\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d['com.docker.compose.project.config_files']\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:6080/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:6080/api/v1/auth/registration-open)",
+      "Bash(curl -s http://localhost:6080/sw.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:6080/sw.js)",
+      "Bash(curl -s http://localhost:6080/)",
+      "Bash(curl -s http://localhost:6080/api/v1/auth/registration-open)",
+      "Bash(curl -s -o /dev/null -w \"home: %{http_code}\\\\n\" http://localhost:6080/)",
+      "Bash(curl -s -o /dev/null -w \"api: %{http_code}\\\\n\" http://localhost:6080/api/v1/auth/registration-open)"
     ]
   }
 }

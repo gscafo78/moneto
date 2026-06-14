@@ -21,7 +21,7 @@ export const accountsApi = {
     const { data } = await api.get<Account[]>('/accounts/')
     return data
   },
-  async create(body: Omit<Account, 'id'>): Promise<Account> {
+  async create(body: { name: string; icon: string; color: string; opening_balance: number; currency: string }): Promise<Account> {
     const { data } = await api.post<Account>('/accounts/', body)
     return data
   },
@@ -32,7 +32,7 @@ export const accountsApi = {
   async remove(id: string): Promise<void> {
     await api.delete(`/accounts/${id}`)
   },
-  async reconcile(id: string, body: { real_balance: number; date?: string }): Promise<ReconcileResponse> {
+  async reconcile(id: string, body: { real_balance: number }): Promise<ReconcileResponse> {
     const { data } = await api.post<ReconcileResponse>(`/accounts/${id}/reconcile`, body)
     return data
   },

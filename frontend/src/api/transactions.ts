@@ -21,15 +21,28 @@ export interface TransactionCreate {
   date?: string
 }
 
+export interface TransactionUpdate {
+  account_id?: string
+  category_id?: string | null
+  amount?: number
+  type?: TxType
+  note?: string | null
+  date?: string
+}
+
 export const transactionsApi = {
-  async list(year?: number, month?: number): Promise<Transaction[]> {
+  async listRange(start: string, end: string, accountId?: string | null): Promise<Transaction[]> {
     const { data } = await api.get<Transaction[]>('/transactions/', {
-      params: { year, month },
+      params: { start, end, account_id: accountId ?? undefined },
     })
     return data
   },
   async create(body: TransactionCreate): Promise<Transaction> {
     const { data } = await api.post<Transaction>('/transactions/', body)
+    return data
+  },
+  async update(id: string, body: TransactionUpdate): Promise<Transaction> {
+    const { data } = await api.patch<Transaction>(`/transactions/${id}`, body)
     return data
   },
   async remove(id: string): Promise<void> {

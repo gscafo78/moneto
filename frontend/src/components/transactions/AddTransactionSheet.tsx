@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Delete } from 'lucide-react'
 import dayjs from 'dayjs'
@@ -6,7 +6,7 @@ import BottomSheet from '../ui/BottomSheet'
 import FieldRow from '../ui/FieldRow'
 import FieldDialog from '../ui/FieldDialog'
 import { useNumpad, NUMPAD_KEYS } from '../../hooks/useNumpad'
-import { transactionsApi, type TxType } from '../../api/transactions'
+import { transactionsApi, type Transaction, type TxType } from '../../api/transactions'
 import { categoriesApi } from '../../api/categories'
 import { accountsApi } from '../../api/accounts'
 import { useCurrency } from '../../hooks/useCurrency'
@@ -14,8 +14,7 @@ import { useCurrency } from '../../hooks/useCurrency'
 interface Props {
   open: boolean
   onClose: () => void
-  year: number
-  month: number
+  transaction?: Transaction | null
 }
 
 type Field = 'amount' | 'category' | 'account' | 'note' | 'date' | null
@@ -27,10 +26,11 @@ function fmtAmount(val: string) {
   })
 }
 
-export default function AddTransactionSheet({ open, onClose, year, month }: Props) {
+export default function AddTransactionSheet({ open, onClose, transaction }: Props) {
   const qc = useQueryClient()
   const cur = useCurrency()
   const { val, amount, press, reset } = useNumpad()
+  const isEdit = !!transaction
 
   const [type, setType]     = useState<TxType>('expense')
   const [catId, setCatId]   = useState<string>('')
@@ -52,27 +52,54 @@ export default function AddTransactionSheet({ open, onClose, year, month }: Prop
   const selectedCat = categories.find(c => c.id === catId)
   const selectedAcc = accounts.find(a => a.id === accId) ?? accounts[0]
 
+  // Precompila i campi in modalità modifica
+  useEffect(() => {
+    if (!open) return
+    if (transaction) {
+      reset(String(transaction.amount))
+      setType(transaction.type)
+      setCatId(transaction.category_id ?? '')
+      setAccId(transaction.account_id)
+      setNote(transaction.note ?? '')
+      setDate(dayjs(transaction.date).format('YYYY-MM-DD'))
+    } else {
+      reset()
+      setType('expense')
+      setCatId('')
+      setAccId('')
+      setNote('')
+      setDate(dayjs().format('YYYY-MM-DD'))
+    }
+    setActiveField(null)
+  }, [open, transaction])
+
   const mutation = useMutation({
-    mutationFn: () => transactionsApi.create({
-      account_id:  accId || accounts[0]?.id,
-      category_id: catId || undefined,
-      amount,
-      type,
-      note:  note || undefined,
-      date:  new Date(date).toISOString(),
-    }),
+    mutationFn: () => isEdit
+      ? transactionsApi.update(transaction!.id, {
+          account_id:  accId || accounts[0]?.id,
+          category_id: catId || null,
+          amount,
+          type,
+          note:  note || null,
+          date:  new Date(date).toISOString(),
+        })
+      : transactionsApi.create({
+          account_id:  accId || accounts[0]?.id,
+          category_id: catId || undefined,
+          amount,
+          type,
+          note:  note || undefined,
+          date:  new Date(date).toISOString(),
+        }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['stats', year, month] })
+      qc.invalidateQueries({ queryKey: ['stats'] })
+      qc.invalidateQueries({ queryKey: ['transactions'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
       handleClose()
     },
   })
 
   function handleClose() {
-    reset()
-    setType('expense')
-    setCatId('')
-    setNote('')
-    setDate(dayjs().format('YYYY-MM-DD'))
     setActiveField(null)
     onClose()
   }
@@ -99,6 +126,10 @@ export default function AddTransactionSheet({ open, onClose, year, month }: Prop
 
   return (
     <BottomSheet open={open} onClose={handleClose}>
+      <h2 className="text-base font-semibold text-white text-center mt-1 mb-2">
+        {isEdit ? 'Modifica transazione' : 'Nuova transazione'}
+      </h2>
+
       {/* Tipo */}
       <div className="flex gap-1 mx-4 mt-2 mb-3 bg-surface-overlay rounded-xl p-1 flex-shrink-0">
         {(['expense','income','transfer'] as TxType[]).map(t => (
@@ -173,7 +204,7 @@ export default function AddTransactionSheet({ open, onClose, year, month }: Prop
             disabled={!canSave || mutation.isPending}
             className="flex-1 bg-brand hover:bg-brand-dark disabled:opacity-40 text-white font-semibold rounded-xl py-3.5 transition min-h-[52px]"
           >
-            {mutation.isPending ? 'Salvataggio…' : 'Salva'}
+            {mutation.isPending ? 'Salvataggio…' : isEdit ? 'Salva modifiche' : 'Salva'}
           </button>
         </div>
       </div>
@@ -273,7 +304,7 @@ export default function AddTransactionSheet({ open, onClose, year, month }: Prop
         <input
           type="date"
           value={draftDate}
-          max={dayjs().format('YYYY-MM-DD')}
+          max={dayjs().add(1, 'year').format('YYYY-MM-DD')}
           onChange={e => setDraftDate(e.target.value)}
           className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 mb-2"
         />

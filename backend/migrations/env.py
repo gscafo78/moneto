@@ -5,7 +5,7 @@ from alembic import context
 
 # Importa tutti i modelli affinché Base.metadata li conosca
 from app.db.base import Base
-from app.models import user, account, category, transaction  # noqa: F401
+from app.models import user, account, category, transaction, app_settings  # noqa: F401
 
 config = context.config
 

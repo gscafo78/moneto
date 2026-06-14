@@ -11,7 +11,7 @@ class Account(Base):
     name = Column(String, nullable=False)
     icon = Column(String, default="💳")
     color = Column(String, default="#6366f1")
-    balance = Column(Numeric(12, 2), default=0)
+    opening_balance = Column(Numeric(12, 2), default=0)
     currency = Column(String(3), default="EUR")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

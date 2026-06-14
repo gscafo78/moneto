@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { PieChart, ArrowLeftRight, Wallet, Tag, Repeat, FileBarChart, Settings, Wallet2 } from 'lucide-react'
+import { PieChart, ArrowLeftRight, Wallet, Tag, Repeat, FileBarChart, Wallet2 } from 'lucide-react'
 
 const items = [
   { to: '/',             Icon: PieChart,      label: 'Home'         },
@@ -8,7 +8,6 @@ const items = [
   { to: '/categories',   Icon: Tag,            label: 'Categorie'    },
   { to: '/recurring',    Icon: Repeat,         label: 'Ricorrenti'   },
   { to: '/report',       Icon: FileBarChart,   label: 'Report'       },
-  { to: '/settings',     Icon: Settings,       label: 'Impostazioni' },
 ]
 
 export default function Sidebar() {

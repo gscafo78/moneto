@@ -9,6 +9,7 @@ from app.models.account import Account
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.core.security import get_current_user
+from app.services.balance import compute_balance, compute_balances
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -19,7 +20,7 @@ class AccountCreate(BaseModel):
     name: str
     icon: str = "💳"
     color: str = "#6366f1"
-    balance: float = 0
+    opening_balance: float = 0
     currency: str = "EUR"
 
 
@@ -38,9 +39,9 @@ class AccountOut(BaseModel):
     currency: str
 
 
-def _out(a: Account) -> AccountOut:
+def _out(a: Account, current_balance: Decimal) -> AccountOut:
     return AccountOut(id=str(a.id), name=a.name, icon=a.icon,
-                      color=a.color, balance=float(a.balance), currency=a.currency)
+                      color=a.color, balance=float(current_balance), currency=a.currency)
 
 
 async def _get_account(db: AsyncSession, account_id: str, user_id) -> Account:
@@ -58,7 +59,9 @@ async def list_accounts(db: AsyncSession = Depends(get_db), user: User = Depends
     result = await db.execute(
         select(Account).where(Account.user_id == user.id, Account.is_active == True).order_by(Account.created_at)
     )
-    return [_out(a) for a in result.scalars()]
+    accounts = list(result.scalars())
+    balances = await compute_balances(db, [a.id for a in accounts])
+    return [_out(a, balances.get(a.id, Decimal("0"))) for a in accounts]
 
 
 @router.post("/", response_model=AccountOut, status_code=201)
@@ -67,7 +70,7 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
     db.add(account)
     await db.commit()
     await db.refresh(account)
-    return _out(account)
+    return _out(account, account.opening_balance)
 
 
 @router.patch("/{account_id}", response_model=AccountOut)
@@ -82,7 +85,8 @@ async def update_account(
         setattr(account, field, value)
     await db.commit()
     await db.refresh(account)
-    return _out(account)
+    balance = await compute_balance(db, account.id)
+    return _out(account, balance)
 
 
 @router.delete("/{account_id}", status_code=204)
@@ -94,7 +98,6 @@ async def delete_account(account_id: str, db: AsyncSession = Depends(get_db), us
 
 class ReconcileRequest(BaseModel):
     real_balance: float
-    date: Optional[datetime] = None
 
 
 class TransactionOut(BaseModel):
@@ -135,10 +138,11 @@ async def reconcile_account(
     account = await _get_account(db, account_id, user.id)
 
     real_balance = Decimal(str(data.real_balance))
-    diff = real_balance - account.balance
+    current_balance = await compute_balance(db, account.id)
+    diff = real_balance - current_balance
 
     if diff == 0:
-        return ReconcileResponse(account=_out(account), transaction=None, difference=0)
+        return ReconcileResponse(account=_out(account, current_balance), transaction=None, difference=0)
 
     tx = Transaction(
         user_id=user.id,
@@ -147,14 +151,14 @@ async def reconcile_account(
         amount=abs(diff),
         type="income" if diff > 0 else "expense",
         note="Rettifica saldo (riconciliazione)",
-        date=data.date or datetime.utcnow(),
+        date=datetime.utcnow(),
         is_reconciliation=True,
     )
     db.add(tx)
-    account.balance = real_balance
 
     await db.commit()
     await db.refresh(account)
     await db.refresh(tx)
 
-    return ReconcileResponse(account=_out(account), transaction=_tx_out(tx), difference=float(diff))
+    new_balance = await compute_balance(db, account.id)
+    return ReconcileResponse(account=_out(account, new_balance), transaction=_tx_out(tx), difference=float(diff))

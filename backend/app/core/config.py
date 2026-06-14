@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://budget:budget_secret@db:5432/budgetdb"
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    # URL del frontend, usato per costruire i link nelle email (verifica, reset, ecc.)
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    # SMTP per invio email (se SMTP_HOST è vuoto, le email vengono solo loggate)
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Moneto <no-reply@moneto.app>"
+    SMTP_TLS: bool = True
+
     class Config:
         env_file = ".env"
 

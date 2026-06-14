@@ -44,7 +44,7 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
   const invalidate = () => qc.invalidateQueries({ queryKey: ['accounts'] })
 
   const createMut = useMutation({
-    mutationFn: () => accountsApi.create({ name, icon, color, balance: parseFloat(balance) || 0, currency: userCurrency }),
+    mutationFn: () => accountsApi.create({ name, icon, color, opening_balance: parseFloat(balance) || 0, currency: userCurrency }),
     onSuccess: () => { invalidate(); onClose() },
   })
 

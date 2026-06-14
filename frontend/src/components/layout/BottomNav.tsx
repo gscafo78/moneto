@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { PieChart, ArrowLeftRight, Wallet, Tag, Repeat, FileBarChart, Settings } from 'lucide-react'
+import { PieChart, ArrowLeftRight, Wallet, Tag, Repeat, FileBarChart } from 'lucide-react'
 
 const tabs = [
   { to: '/',             Icon: PieChart,          label: 'Home'        },
@@ -8,12 +8,11 @@ const tabs = [
   { to: '/categories',   Icon: Tag,                label: 'Categorie'   },
   { to: '/recurring',    Icon: Repeat,             label: 'Ricorrenti'  },
   { to: '/report',       Icon: FileBarChart,       label: 'Report'      },
-  { to: '/settings',     Icon: Settings,           label: 'Impostazioni'},
 ]
 
 export default function BottomNav() {
   return (
-    <nav className="flex bg-[#1a1a24] border-t border-white/10 px-2 py-1 gap-1">
+    <nav className="flex bg-[#1a1a24] border-t border-white/10 px-2 py-1 gap-1 safe-bottom">
       {tabs.map(({ to, Icon, label }) => (
         <NavLink
           key={to}

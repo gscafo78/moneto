@@ -8,12 +8,23 @@ export interface CategoryStat {
   total: number
 }
 
-export interface MonthlySummary {
+export interface PendingItem {
+  id: string
+  date: string
+  amount: number
+  category_id: string | null
+  account_id: string
+  note: string | null
+  is_recurring: boolean
+}
+
+export interface SummaryStats {
   income: number
   expenses: number
+  pending_expenses: number
   balance: number
-  real_balance: number
   by_category: CategoryStat[]
+  pending_items: PendingItem[]
 }
 
 export interface MonthTrend {
@@ -24,9 +35,9 @@ export interface MonthTrend {
 }
 
 export const statsApi = {
-  async monthly(year: number, month: number, accountId?: string | null): Promise<MonthlySummary> {
-    const { data } = await api.get<MonthlySummary>('/stats/monthly', {
-      params: { year, month, account_id: accountId ?? undefined },
+  async summary(start: string, end: string, accountId?: string | null): Promise<SummaryStats> {
+    const { data } = await api.get<SummaryStats>('/stats/summary', {
+      params: { start, end, account_id: accountId ?? undefined },
     })
     return data
   },

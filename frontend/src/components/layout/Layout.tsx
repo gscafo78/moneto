@@ -17,7 +17,7 @@ export default function Layout() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 max-w-2xl mx-auto safe-bottom z-50 md:hidden">
+      <div className="fixed bottom-0 inset-x-0 max-w-2xl mx-auto z-50 md:hidden">
         <BottomNav />
       </div>
     </div>

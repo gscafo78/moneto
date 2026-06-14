@@ -832,6 +832,104 @@ nel tempo e l'export CSV dei movimenti del mese.
 
 ---
 
+## Milestone 15 — Saldo reale per conto, dashboard per periodo, modifica/eliminazione movimenti ✅
+
+**Obiettivo**: il saldo di un conto non è più un contatore aggiornato a ogni
+transazione, ma viene calcolato al volo dalle transazioni reali (`date <= now`),
+permettendo transazioni con data futura ("non ancora contabilizzate"). La Dashboard
+mostra le metriche del periodo selezionabile (mese corrente, settimana corrente o
+intervallo personalizzato) e i suoi indicatori sono collegati al saldo reale dei conti.
+Aggiunta anche la modifica/eliminazione delle transazioni esistenti.
+
+> **Supera/aggiorna** quanto descritto nella Milestone 12 (`real_balance` su
+> `/stats/monthly`) e nella Milestone 14 (riconciliazione che aggiornava
+> `account.balance` direttamente): entrambi gli endpoint sono stati sostituiti come
+> descritto sotto.
+
+### Backend
+- Migration `006_real_balance_model` — rinomina `accounts.balance` →
+  `accounts.opening_balance` e "scarica" su questa colonna il netto di tutte le
+  transazioni esistenti, in modo che il saldo reale calcolato resti invariato dopo la
+  migrazione
+- `app/services/balance.py` — `compute_balances()` / `compute_balance()`: saldo reale di
+  un conto = `opening_balance + Σ(entrate − uscite)` delle transazioni con
+  `date <= as_of` (default: ora)
+- Rimosse tutte le mutazioni dirette di `account.balance` da
+  `transactions.py` (create/delete), `csv_import.py` (confirm) e
+  `services/recurring.py` (`process_due_recurring`): il saldo si ricalcola sempre on
+  read
+- `app/api/v1/endpoints/accounts.py`:
+  - `AccountOut.balance` è ora il saldo reale calcolato (`compute_balances`)
+  - `AccountCreate` usa `opening_balance` (saldo iniziale, label UI "Saldo iniziale")
+  - `POST /accounts/{id}/reconcile` non aggiorna più `account.balance`: crea solo la
+    transazione di rettifica (`is_reconciliation=true`) e il nuovo saldo viene
+    ricalcolato da `compute_balance`. Le rettifiche continuano a contare come
+    entrate/uscite normali in `/stats/summary` e `/stats/trend` (per scelta esplicita:
+    una rettifica positiva va in "Entrate", una negativa in "Uscite")
+- `app/api/v1/endpoints/transactions.py`:
+  - `GET /transactions/` accetta `start`/`end` (oltre a `year`/`month`) e
+    `account_id` come filtri
+  - nuovo `PATCH /transactions/{id}` (`TransactionUpdate`, tutti i campi opzionali) per
+    la modifica di una transazione esistente
+- `app/services/recurring.py` — `projected_occurrences_in_range(rt, start, end, today)`
+  generalizza `projected_occurrences()` a un intervallo di date arbitrario (non solo il
+  mese corrente)
+- `/api/v1/stats/monthly` → **`GET /api/v1/stats/summary?start=...&end=...&account_id=...`**
+  (`/stats/trend` invariato):
+  - `income` / `expenses` — entrate/uscite reali (`date <= now`) nel periodo
+  - `pending_expenses` — spese con data futura nel periodo + occorrenze ricorrenti
+    previste non ancora generate
+  - `balance` — saldo reale (`compute_balances`) del/dei conto/i in scope, **indipendente
+    dal periodo** (stesso valore della pagina Conti)
+  - `by_category` — spese reali + proiezioni ricorrenti del periodo; le spese senza
+    categoria vengono raggruppate sotto la categoria predefinita "Varie" 📦
+
+### Frontend
+- `store/dateStore.ts` — esteso con `mode: 'month' | 'week' | 'custom'`,
+  `customStart`/`customEnd`, `getRange()`; settimana = Lunedì-Domenica (`dayjs`
+  `isoWeek`)
+- `components/layout/PeriodPanel.tsx` — pannello per scegliere Mese corrente / Settimana
+  corrente / Intervallo personalizzato (con campi "Da"/"A"), apribile da `TopBar.tsx`
+- `hooks/useSummaryStats.ts` (ex `useMonthlyStats.ts`) e `hooks/useTransactions.ts` —
+  usano `getRange()` + conto selezionato, chiamano `/stats/summary` e
+  `/transactions/?start=...&end=...`; invalidazione cache per prefisso
+  (`['stats']`, `['transactions']`, `['accounts']`)
+- `components/dashboard/SummaryBar.tsx`:
+  - "Entrate" / "Uscite" / "Non contabilizzate" → metriche del periodo selezionato
+  - "Saldo" → saldo reale del/dei conto/i (`summary.balance`, uguale alla pagina Conti)
+  - "Saldo disponibile" → `balance - pending_expenses`
+- `pages/Dashboard.tsx` — cliccando una fetta/voce del grafico a torta si filtra
+  l'elenco movimenti del periodo per quella categoria (le spese senza categoria
+  rientrano in "Varie"); ricliccando si torna alla vista per categorie
+- `components/transactions/AddTransactionSheet.tsx` — modalità duale create/modifica
+  tramite prop opzionale `transaction`: precompila i campi e usa
+  `PATCH /transactions/{id}` invece di `POST`; limite data portato a "oggi + 1 anno"
+  (permette transazioni future)
+- `components/transactions/TransactionDialogs.tsx` — nuovo componente condiviso
+  (estratto da `Transactions.tsx`, riusato in `Dashboard.tsx`): bottom sheet di
+  dettaglio movimento con bottoni "Modifica" e "Elimina" + dialog di conferma
+  eliminazione
+- `components/accounts/AddAccountSheet.tsx` / `api/accounts.ts` — campo "Saldo iniziale"
+  mappato su `opening_balance`
+
+**Criteri di completamento**:
+- `alembic upgrade head` applica `006` senza errori; per un conto con saldo noto,
+  `GET /accounts` restituisce lo stesso saldo di prima della migrazione
+- Una transazione con data futura non modifica il saldo del conto ma appare in
+  Movimenti e in "Non contabilizzate"
+- Cambiando periodo in Home (mese/settimana/intervallo personalizzato) le card e i
+  Movimenti si aggiornano coerentemente; "Saldo" è sempre uguale al saldo del conto
+  nella pagina Conti
+- Cliccando una categoria nel grafico a torta si vedono i movimenti di quella categoria
+  del periodo (incluse le spese senza categoria sotto "Varie"); ricliccando si torna
+  alla vista generale
+- Da un movimento si può aprire "Modifica" (precompilato, salva con `PATCH`) o
+  "Elimina" (con conferma)
+- Una riconciliazione aggiorna sia il saldo in Conti che la card "Saldo" in Home, e la
+  rettifica compare in Entrate/Uscite del periodo in cui è stata creata
+
+---
+
 ## Struttura file finale attesa
 
 ```

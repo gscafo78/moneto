@@ -119,15 +119,20 @@ export default function Login() {
             </div>
 
             {/* Ricordami */}
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={remember}
-                onChange={e => setRemember(e.target.checked)}
-                className="w-4 h-4 rounded border-white/20 bg-surface-overlay text-brand focus:ring-brand/60 focus:ring-offset-0"
-              />
-              <span className="text-sm text-white/60">Ricordami per 30 giorni</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={e => setRemember(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-surface-overlay text-brand focus:ring-brand/60 focus:ring-offset-0"
+                />
+                <span className="text-sm text-white/60">Ricordami per 30 giorni</span>
+              </label>
+              <Link to="/forgot-password" className="text-sm text-brand hover:text-brand-dark font-medium transition">
+                Password dimenticata?
+              </Link>
+            </div>
 
             {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 

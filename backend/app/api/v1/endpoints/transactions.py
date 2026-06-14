@@ -1,5 +1,4 @@
-from decimal import Decimal
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user
 from app.db.session import get_db
-from app.models.account import Account
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -21,6 +19,15 @@ class TransactionCreate(BaseModel):
     category_id: Optional[str] = None
     amount: float
     type: Literal["expense", "income", "transfer"]
+    note: Optional[str] = None
+    date: Optional[datetime] = None
+
+
+class TransactionUpdate(BaseModel):
+    account_id: Optional[str] = None
+    category_id: Optional[str] = None
+    amount: Optional[float] = None
+    type: Optional[Literal["expense", "income", "transfer"]] = None
     note: Optional[str] = None
     date: Optional[datetime] = None
 
@@ -51,15 +58,25 @@ def _out(t: Transaction) -> TransactionOut:
 async def list_transactions(
     year: int = Query(default=None),
     month: int = Query(default=None),
+    start: date = Query(default=None),
+    end: date = Query(default=None),
+    account_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     q = select(Transaction).where(Transaction.user_id == user.id)
-    if year and month:
+    if start and end:
+        q = q.where(
+            Transaction.date >= datetime.combine(start, time.min),
+            Transaction.date < datetime.combine(end + timedelta(days=1), time.min),
+        )
+    elif year and month:
         q = q.where(
             extract("year", Transaction.date) == year,
             extract("month", Transaction.date) == month,
         )
+    if account_id:
+        q = q.where(Transaction.account_id == account_id)
     q = q.order_by(Transaction.date.desc())
     result = await db.execute(q)
     return [_out(t) for t in result.scalars()]
@@ -82,16 +99,27 @@ async def create_transaction(
         date=tx_date,
     )
     db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
+    return _out(tx)
 
-    # Aggiorna saldo conto
-    acc_q = await db.execute(select(Account).where(Account.id == data.account_id))
-    account = acc_q.scalar_one_or_none()
-    if account:
-        amt = Decimal(str(data.amount))
-        if data.type == "income":
-            account.balance += amt
-        elif data.type == "expense":
-            account.balance -= amt
+
+@router.patch("/{tx_id}", response_model=TransactionOut)
+async def update_transaction(
+    tx_id: str,
+    data: TransactionUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Transaction).where(Transaction.id == tx_id, Transaction.user_id == user.id)
+    )
+    tx = result.scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transazione non trovata")
+
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(tx, field, value)
 
     await db.commit()
     await db.refresh(tx)
@@ -110,14 +138,6 @@ async def delete_transaction(
     tx = result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transazione non trovata")
-
-    acc_q = await db.execute(select(Account).where(Account.id == tx.account_id))
-    account = acc_q.scalar_one_or_none()
-    if account:
-        if tx.type == "income":
-            account.balance -= tx.amount
-        elif tx.type == "expense":
-            account.balance += tx.amount
 
     await db.delete(tx)
     await db.commit()

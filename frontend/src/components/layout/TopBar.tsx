@@ -1,22 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Settings, LogOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CalendarRange, Settings, LogOut } from 'lucide-react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/it'
 import { useDateStore } from '../../store/dateStore'
 import { useSwipe } from '../../hooks/useSwipe'
 import { useAuthStore } from '../../store/authStore'
+import PeriodPanel from './PeriodPanel'
 
 dayjs.locale('it')
 
 export default function TopBar() {
-  const { date, prev, next } = useDateStore()
+  const { mode, date, prev, next, isAtPresent, getRange } = useDateStore()
   const { user, logout } = useAuthStore()
-  const label = dayjs(date).format('MMMM YYYY')
-  const isNow = dayjs(date).isSame(dayjs(), 'month')
+  const { start, end } = getRange()
+  const isNow = isAtPresent()
+
+  let label: string
+  if (mode === 'month') label = dayjs(date).format('MMMM YYYY')
+  else label = `${dayjs(start).format('D MMM')} - ${dayjs(end).format('D MMM')}`
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [periodOpen, setPeriodOpen] = useState(false)
+  const periodRef = useRef<HTMLDivElement>(null)
 
   const swipeHandlers = useSwipe({
     onSwipeLeft:  () => { if (!isNow) next() },
@@ -29,6 +36,9 @@ export default function TopBar() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false)
       }
+      if (periodRef.current && !periodRef.current.contains(e.target as Node)) {
+        setPeriodOpen(false)
+      }
     }
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
@@ -36,12 +46,13 @@ export default function TopBar() {
 
   return (
     <header
-      className="flex items-center justify-between gap-2 px-2 pt-4 pb-2 sticky top-0 bg-[#0f0f13] z-10 select-none"
+      className="flex items-center justify-between gap-2 px-2 pt-4 pb-2 sticky top-0 bg-[#0f0f13] z-10 select-none safe-top"
       {...swipeHandlers}
     >
       <button
         onClick={prev}
-        className="p-2.5 rounded-full active:bg-white/10 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+        disabled={mode === 'custom'}
+        className="p-2.5 rounded-full active:bg-white/10 transition-colors disabled:opacity-30 min-w-[44px] min-h-[44px] flex items-center justify-center"
       >
         <ChevronLeft size={22} className="text-white/60" />
       </button>
@@ -57,8 +68,20 @@ export default function TopBar() {
           <ChevronRight size={22} className="text-white/60" />
         </button>
 
-        {/* Menu utente — solo desktop, su mobile l'accesso è dalla bottom nav */}
-        <div className="relative hidden md:block ml-2" ref={menuRef}>
+        <div className="relative" ref={periodRef}>
+          <button
+            onClick={() => setPeriodOpen(v => !v)}
+            className="p-2.5 rounded-full active:bg-white/10 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-haspopup="true"
+            aria-expanded={periodOpen}
+          >
+            <CalendarRange size={20} className="text-white/60" />
+          </button>
+          {periodOpen && <PeriodPanel onClose={() => setPeriodOpen(false)} />}
+        </div>
+
+        {/* Menu utente — unico punto di accesso alle Impostazioni */}
+        <div className="relative ml-2" ref={menuRef}>
           <button
             onClick={() => setMenuOpen(v => !v)}
             className="flex items-center justify-center w-9 h-9 rounded-full bg-brand/20 text-brand text-sm font-semibold hover:bg-brand/30 transition-colors"

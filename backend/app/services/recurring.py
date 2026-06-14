@@ -4,7 +4,6 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.account import Account
 from app.models.recurring_transaction import RecurringTransaction
 from app.models.transaction import Transaction
 from app.services.holidays import next_business_day
@@ -58,29 +57,21 @@ async def process_due_recurring(db: AsyncSession) -> None:
             )
             db.add(tx)
 
-            acc_result = await db.execute(select(Account).where(Account.id == rt.account_id))
-            account = acc_result.scalar_one_or_none()
-            if account:
-                if rt.type == "income":
-                    account.balance += rt.amount
-                elif rt.type == "expense":
-                    account.balance -= rt.amount
-
             rt.last_run_date = raw
 
     await db.commit()
 
 
-def projected_occurrences(rt: RecurringTransaction, year: int, month: int, today: date) -> list[date]:
+def projected_occurrences_in_range(rt: RecurringTransaction, start: date, end: date, today: date) -> list[date]:
     """Date (già spostate sul primo giorno lavorativo) delle occorrenze di `rt` che
-    cadono nel mese `year`/`month` e non sono ancora state generate (data > oggi)."""
+    cadono nell'intervallo [start, end] e non sono ancora state generate (data > oggi)."""
     occurrences: list[date] = []
     raw = next_raw_date(rt)
     while raw is not None:
         shifted = next_business_day(raw)
-        if (shifted.year, shifted.month) > (year, month):
+        if shifted > end:
             break
-        if (shifted.year, shifted.month) == (year, month) and shifted > today:
+        if shifted >= start and shifted > today:
             occurrences.append(shifted)
         if rt.end_date is not None and raw + INTERVALS[rt.frequency] > rt.end_date:
             raw = None
