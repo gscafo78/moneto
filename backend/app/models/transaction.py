@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, func, Text, Boolean
+from sqlalchemy import Column, String, Numeric, DateTime, ForeignKey, func, Text, Boolean, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -16,6 +16,7 @@ class Transaction(Base):
     date = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     import_hash = Column(String(64), nullable=True)
     is_reconciliation = Column(Boolean, default=False, nullable=False, server_default="false")
+    voucher_quantity = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="transactions")

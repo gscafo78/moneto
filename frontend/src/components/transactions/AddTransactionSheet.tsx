@@ -52,11 +52,15 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   const selectedCat = categories.find(c => c.id === catId)
   const selectedAcc = accounts.find(a => a.id === accId) ?? accounts[0]
 
+  const isVoucherAccount = !!(selectedAcc?.meal_voucher_value)
+  const voucherValue = selectedAcc?.meal_voucher_value ?? 0
+  const numpadKeys = isVoucherAccount ? NUMPAD_KEYS.filter(k => k !== '.') : NUMPAD_KEYS
+
   // Precompila i campi in modalità modifica
   useEffect(() => {
     if (!open) return
     if (transaction) {
-      reset(String(transaction.amount))
+      reset(transaction.voucher_quantity != null ? String(transaction.voucher_quantity) : String(transaction.amount))
       setType(transaction.type)
       setCatId(transaction.category_id ?? '')
       setAccId(transaction.account_id)
@@ -73,23 +77,28 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
     setActiveField(null)
   }, [open, transaction])
 
+  const finalAmount = isVoucherAccount ? amount * voucherValue : amount
+  const voucherQuantity = isVoucherAccount ? amount : null
+
   const mutation = useMutation({
     mutationFn: () => isEdit
       ? transactionsApi.update(transaction!.id, {
           account_id:  accId || accounts[0]?.id,
           category_id: catId || null,
-          amount,
+          amount: finalAmount,
           type,
           note:  note || null,
           date:  new Date(date).toISOString(),
+          voucher_quantity: voucherQuantity,
         })
       : transactionsApi.create({
           account_id:  accId || accounts[0]?.id,
           category_id: catId || undefined,
-          amount,
+          amount: finalAmount,
           type,
           note:  note || undefined,
           date:  new Date(date).toISOString(),
+          voucher_quantity: voucherQuantity,
         }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['stats'] })
@@ -116,7 +125,11 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   function confirmField() {
     if (activeField === 'amount')   reset(draft.val)
     if (activeField === 'category') setCatId(draftCatId)
-    if (activeField === 'account')  setAccId(draftAccId)
+    if (activeField === 'account')  {
+      const newAcc = accounts.find(a => a.id === draftAccId)
+      if (!!(newAcc?.meal_voucher_value) !== isVoucherAccount) reset('0')
+      setAccId(draftAccId)
+    }
     if (activeField === 'note')     setNote(draftNote)
     if (activeField === 'date')     setDate(draftDate)
     setActiveField(null)
@@ -150,9 +163,13 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       {/* Campi */}
       <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-2">
         <FieldRow
-          label="Importo"
-          value={amount > 0 ? `${cur} ${fmtAmount(val)}` : undefined}
-          placeholder="Inserisci importo"
+          label={isVoucherAccount ? 'Numero buoni' : 'Importo'}
+          value={
+            isVoucherAccount
+              ? (amount > 0 ? `${amount} buoni · ${cur} ${fmtAmount((amount * voucherValue).toFixed(2))}` : undefined)
+              : (amount > 0 ? `${cur} ${fmtAmount(val)}` : undefined)
+          }
+          placeholder={isVoucherAccount ? 'Inserisci numero buoni' : 'Inserisci importo'}
           onClick={() => openField('amount')}
         />
 
@@ -212,18 +229,25 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       {/* Dialog: Importo */}
       <FieldDialog
         open={activeField === 'amount'}
-        title="Importo"
+        title={isVoucherAccount ? 'Numero buoni' : 'Importo'}
         onCancel={() => setActiveField(null)}
         onConfirm={confirmField}
         canConfirm={draft.amount > 0}
       >
         <div className="text-center py-3">
-          <span className={`text-4xl font-bold tabular-nums ${type === 'expense' ? 'text-expense' : type === 'income' ? 'text-income' : 'text-brand'}`}>
-            {cur} {fmtAmount(draft.val)}
-          </span>
+          {isVoucherAccount ? (
+            <>
+              <span className="text-4xl font-bold tabular-nums text-brand">{draft.val} buoni</span>
+              <p className="text-sm text-white/40 mt-1">{cur} {fmtAmount((draft.amount * voucherValue).toFixed(2))}</p>
+            </>
+          ) : (
+            <span className={`text-4xl font-bold tabular-nums ${type === 'expense' ? 'text-expense' : type === 'income' ? 'text-income' : 'text-brand'}`}>
+              {cur} {fmtAmount(draft.val)}
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-3 gap-1.5 mb-2">
-          {NUMPAD_KEYS.map(k => (
+          {numpadKeys.map(k => (
             <button
               key={k}
               onClick={() => draft.press(k)}

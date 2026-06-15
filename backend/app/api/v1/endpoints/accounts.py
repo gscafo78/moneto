@@ -22,12 +22,14 @@ class AccountCreate(BaseModel):
     color: str = "#6366f1"
     opening_balance: float = 0
     currency: str = "EUR"
+    meal_voucher_value: Optional[float] = None
 
 
 class AccountUpdate(BaseModel):
     name: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
+    meal_voucher_value: Optional[float] = None
 
 
 class AccountOut(BaseModel):
@@ -37,11 +39,13 @@ class AccountOut(BaseModel):
     color: str
     balance: float
     currency: str
+    meal_voucher_value: Optional[float] = None
 
 
 def _out(a: Account, current_balance: Decimal) -> AccountOut:
     return AccountOut(id=str(a.id), name=a.name, icon=a.icon,
-                      color=a.color, balance=float(current_balance), currency=a.currency)
+                      color=a.color, balance=float(current_balance), currency=a.currency,
+                      meal_voucher_value=float(a.meal_voucher_value) if a.meal_voucher_value is not None else None)
 
 
 async def _get_account(db: AsyncSession, account_id: str, user_id) -> Account:

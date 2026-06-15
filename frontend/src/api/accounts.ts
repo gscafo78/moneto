@@ -8,6 +8,7 @@ export interface Account {
   color: string
   balance: number
   currency: string
+  meal_voucher_value: number | null
 }
 
 export interface ReconcileResponse {
@@ -21,11 +22,11 @@ export const accountsApi = {
     const { data } = await api.get<Account[]>('/accounts/')
     return data
   },
-  async create(body: { name: string; icon: string; color: string; opening_balance: number; currency: string }): Promise<Account> {
+  async create(body: { name: string; icon: string; color: string; opening_balance: number; currency: string; meal_voucher_value?: number | null }): Promise<Account> {
     const { data } = await api.post<Account>('/accounts/', body)
     return data
   },
-  async update(id: string, body: Partial<Pick<Account, 'name' | 'icon' | 'color'>>): Promise<Account> {
+  async update(id: string, body: Partial<Pick<Account, 'name' | 'icon' | 'color' | 'meal_voucher_value'>>): Promise<Account> {
     const { data } = await api.patch<Account>(`/accounts/${id}`, body)
     return data
   },

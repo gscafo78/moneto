@@ -10,6 +10,7 @@ export interface Transaction {
   type: TxType
   note: string | null
   date: string
+  voucher_quantity?: number | null
 }
 
 export interface TransactionCreate {
@@ -19,6 +20,7 @@ export interface TransactionCreate {
   type: TxType
   note?: string
   date?: string
+  voucher_quantity?: number | null
 }
 
 export interface TransactionUpdate {
@@ -28,6 +30,7 @@ export interface TransactionUpdate {
   type?: TxType
   note?: string | null
   date?: string
+  voucher_quantity?: number | null
 }
 
 export const transactionsApi = {

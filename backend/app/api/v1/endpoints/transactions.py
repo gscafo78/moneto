@@ -6,8 +6,11 @@ from pydantic import BaseModel
 from sqlalchemy import extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from decimal import Decimal
+
 from app.core.security import get_current_user
 from app.db.session import get_db
+from app.models.account import Account
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -21,6 +24,7 @@ class TransactionCreate(BaseModel):
     type: Literal["expense", "income", "transfer"]
     note: Optional[str] = None
     date: Optional[datetime] = None
+    voucher_quantity: Optional[int] = None
 
 
 class TransactionUpdate(BaseModel):
@@ -30,6 +34,7 @@ class TransactionUpdate(BaseModel):
     type: Optional[Literal["expense", "income", "transfer"]] = None
     note: Optional[str] = None
     date: Optional[datetime] = None
+    voucher_quantity: Optional[int] = None
 
 
 class TransactionOut(BaseModel):
@@ -40,6 +45,7 @@ class TransactionOut(BaseModel):
     type: str
     note: Optional[str]
     date: datetime
+    voucher_quantity: Optional[int] = None
 
 
 def _out(t: Transaction) -> TransactionOut:
@@ -51,7 +57,15 @@ def _out(t: Transaction) -> TransactionOut:
         type=t.type,
         note=t.note,
         date=t.date,
+        voucher_quantity=t.voucher_quantity,
     )
+
+
+async def _get_account_for_user(db: AsyncSession, account_id: str, user_id) -> Optional[Account]:
+    result = await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
 
 
 @router.get("/", response_model=List[TransactionOut])
@@ -89,14 +103,21 @@ async def create_transaction(
     user: User = Depends(get_current_user),
 ):
     tx_date = data.date or datetime.utcnow()
+    amount = data.amount
+    if data.voucher_quantity is not None:
+        account = await _get_account_for_user(db, data.account_id, user.id)
+        if account and account.meal_voucher_value is not None:
+            amount = float(Decimal(data.voucher_quantity) * account.meal_voucher_value)
+
     tx = Transaction(
         user_id=user.id,
         account_id=data.account_id,
         category_id=data.category_id,
-        amount=data.amount,
+        amount=amount,
         type=data.type,
         note=data.note,
         date=tx_date,
+        voucher_quantity=data.voucher_quantity,
     )
     db.add(tx)
     await db.commit()
@@ -118,7 +139,15 @@ async def update_transaction(
     if not tx:
         raise HTTPException(status_code=404, detail="Transazione non trovata")
 
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+
+    if "voucher_quantity" in update_data and update_data["voucher_quantity"] is not None:
+        account_id = update_data.get("account_id", str(tx.account_id))
+        account = await _get_account_for_user(db, account_id, user.id)
+        if account and account.meal_voucher_value is not None:
+            update_data["amount"] = float(Decimal(update_data["voucher_quantity"]) * account.meal_voucher_value)
+
+    for field, value in update_data.items():
         setattr(tx, field, value)
 
     await db.commit()

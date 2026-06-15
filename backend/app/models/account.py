@@ -13,6 +13,7 @@ class Account(Base):
     color = Column(String, default="#6366f1")
     opening_balance = Column(Numeric(12, 2), default=0)
     currency = Column(String(3), default="EUR")
+    meal_voucher_value = Column(Numeric(12, 2), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

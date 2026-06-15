@@ -26,6 +26,7 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
   const [icon,    setIcon]    = useState('💳')
   const [color,   setColor]   = useState('#6366f1')
   const [balance, setBalance] = useState('0')
+  const [mealVoucherValue, setMealVoucherValue] = useState('')
   const [tab,     setTab]     = useState<'emoji' | 'color' | null>(null)
 
   // Precompila in modalità edit
@@ -35,8 +36,9 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
       setIcon(account.icon)
       setColor(account.color)
       setBalance(String(account.balance))
+      setMealVoucherValue(account.meal_voucher_value != null ? String(account.meal_voucher_value) : '')
     } else {
-      setName(''); setIcon('💳'); setColor('#6366f1'); setBalance('0')
+      setName(''); setIcon('💳'); setColor('#6366f1'); setBalance('0'); setMealVoucherValue('')
     }
     setTab(null)
   }, [account, open])
@@ -44,12 +46,18 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
   const invalidate = () => qc.invalidateQueries({ queryKey: ['accounts'] })
 
   const createMut = useMutation({
-    mutationFn: () => accountsApi.create({ name, icon, color, opening_balance: parseFloat(balance) || 0, currency: userCurrency }),
+    mutationFn: () => accountsApi.create({
+      name, icon, color, opening_balance: parseFloat(balance) || 0, currency: userCurrency,
+      meal_voucher_value: mealVoucherValue ? parseFloat(mealVoucherValue) : null,
+    }),
     onSuccess: () => { invalidate(); onClose() },
   })
 
   const updateMut = useMutation({
-    mutationFn: () => accountsApi.update(account!.id, { name, icon, color }),
+    mutationFn: () => accountsApi.update(account!.id, {
+      name, icon, color,
+      meal_voucher_value: mealVoucherValue ? parseFloat(mealVoucherValue) : null,
+    }),
     onSuccess: () => { invalidate(); onClose() },
   })
 
@@ -100,6 +108,19 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Es. Conto corrente"
+            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60"
+          />
+        </div>
+
+        {/* Valore buono pasto (opzionale) */}
+        <div>
+          <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Valore buono pasto (opzionale)</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={mealVoucherValue}
+            onChange={e => setMealVoucherValue(e.target.value)}
+            placeholder="es. 7.00"
             className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60"
           />
         </div>
