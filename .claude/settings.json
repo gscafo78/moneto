@@ -17,7 +17,8 @@
       "Bash(curl -s http://localhost:6080/)",
       "Bash(curl -s http://localhost:6080/api/v1/auth/registration-open)",
       "Bash(curl -s -o /dev/null -w \"home: %{http_code}\\\\n\" http://localhost:6080/)",
-      "Bash(curl -s -o /dev/null -w \"api: %{http_code}\\\\n\" http://localhost:6080/api/v1/auth/registration-open)"
+      "Bash(curl -s -o /dev/null -w \"api: %{http_code}\\\\n\" http://localhost:6080/api/v1/auth/registration-open)",
+      "Bash(chmod +x /opt/moneto/scripts/release.sh)"
     ]
   }
 }

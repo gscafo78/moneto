@@ -1,5 +1,16 @@
+import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import List
+
+# Priorità: variabile d'ambiente APP_VERSION (impostata via docker-compose) →
+# file VERSION nella root del repo (funziona in locale / dev senza Docker) → fallback
+_VERSION_FILE = Path(__file__).parents[3] / "VERSION"
+APP_VERSION: str = (
+    os.environ.get("APP_VERSION")
+    or (_VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else None)
+    or "0.0.0"
+)
 
 
 class Settings(BaseSettings):

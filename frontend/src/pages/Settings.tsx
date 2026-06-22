@@ -1,17 +1,29 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ShieldCheck, ShieldOff, LogOut, Mail, User as UserIcon, Coins, Wallet, AlertTriangle, Lock, KeyRound, Send } from 'lucide-react'
+import { ShieldCheck, ShieldOff, LogOut, Mail, User as UserIcon, Coins, Wallet, AlertTriangle, Lock, KeyRound, Send, Server } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import { mfaApi, authApi, adminApi } from '../api/auth'
 import { accountsApi } from '../api/accounts'
 import { useAuthStore } from '../store/authStore'
 import { CURRENCIES } from '../utils/currency'
 
+interface HealthInfo {
+  status: string
+  version: string
+  environment: string
+}
+
 export default function Settings() {
   const { user, logout, refreshUser } = useAuthStore()
   const qc = useQueryClient()
 
   const { data: accounts = [] } = useQuery({ queryKey: ['accounts'], queryFn: accountsApi.list })
+
+  const { data: health } = useQuery({
+    queryKey: ['health'],
+    queryFn: async (): Promise<HealthInfo> => (await fetch('/health')).json(),
+    enabled: !!user?.is_admin,
+  })
 
   const prefsMutation = useMutation({
     mutationFn: authApi.updateMe,
@@ -588,6 +600,32 @@ export default function Settings() {
               </button>
             </div>
           </form>
+
+          {/* Info sistema */}
+          <div className="pt-3 border-t border-white/10">
+            <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
+              <Server size={16} className="text-white/40" />
+              Info sistema
+            </h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Frontend</p>
+                <p className="font-mono text-white/70">{__APP_VERSION__}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Backend</p>
+                <p className="font-mono text-white/70">{health?.version ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Ambiente</p>
+                <p className="font-mono text-white/70">{health?.environment ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Status</p>
+                <p className="font-mono text-income">{health?.status ?? '—'}</p>
+              </div>
+            </div>
+          </div>
         </section>
       )}
 
@@ -602,7 +640,7 @@ export default function Settings() {
         </button>
       </section>
 
-      <p className="text-center text-xs text-white/20 pb-4">Moneto</p>
+      <p className="text-center text-xs text-white/20 pb-4">Moneto v{__APP_VERSION__}</p>
     </div>
   )
 }
