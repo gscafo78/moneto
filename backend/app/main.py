@@ -17,6 +17,7 @@ async def _run_recurring_job() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await _run_recurring_job()
     scheduler = AsyncIOScheduler()
     scheduler.add_job(_run_recurring_job, "cron", hour=0, minute=10, id="process_due_recurring")
     scheduler.start()

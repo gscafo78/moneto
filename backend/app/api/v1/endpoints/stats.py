@@ -149,7 +149,7 @@ async def summary(
             for occ in occurrences:
                 pending_items.append(PendingItem(
                     id=f"recurring-{rt.id}-{occ.isoformat()}",
-                    date=datetime.combine(occ, time.min, tzinfo=timezone.utc),
+                    date=datetime(occ.year, occ.month, occ.day, 9, 0, 0, tzinfo=timezone.utc),
                     amount=float(rt.amount),
                     category_id=str(rt.category_id) if rt.category_id else None,
                     account_id=str(rt.account_id),

@@ -53,7 +53,7 @@ async def process_due_recurring(db: AsyncSession) -> None:
                 amount=rt.amount,
                 type=rt.type,
                 note=rt.description,
-                date=datetime(shifted.year, shifted.month, shifted.day, tzinfo=timezone.utc),
+                date=datetime(shifted.year, shifted.month, shifted.day, 9, 0, 0, tzinfo=timezone.utc),
             )
             db.add(tx)
 
