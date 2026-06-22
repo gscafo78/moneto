@@ -18,7 +18,22 @@
       "Bash(curl -s http://localhost:6080/api/v1/auth/registration-open)",
       "Bash(curl -s -o /dev/null -w \"home: %{http_code}\\\\n\" http://localhost:6080/)",
       "Bash(curl -s -o /dev/null -w \"api: %{http_code}\\\\n\" http://localhost:6080/api/v1/auth/registration-open)",
-      "Bash(chmod +x /opt/moneto/scripts/release.sh)"
+      "Bash(chmod +x /opt/moneto/scripts/release.sh)",
+      "Bash(python3 -m json.tool)",
+      "Bash(docker stop *)",
+      "Bash(docker rm *)",
+      "Bash(curl -s http://localhost:6080/health)",
+      "Bash(git -C /opt/moneto status --short)",
+      "Bash(git -C /opt/moneto rev-parse --show-toplevel)",
+      "Bash(git -C /opt/moneto status --short --ignored)",
+      "Bash(git -C /opt/moneto log --oneline -5)",
+      "Bash(git -C /opt/moneto diff --stat HEAD)",
+      "Bash(git -C /opt/moneto ls-files)",
+      "Bash(git -C /opt/moneto show c42071a --stat)",
+      "Bash(git -C /opt/moneto diff .claude/settings.json)",
+      "Bash(find /etc/systemd/system -iname \"*celery*\" -o -iname \"*nextfolio*\" 2>/dev/null)",
+      "Read(//etc/systemd/system/**)",
+      "Bash(command -v docker pm2 supervisorctl systemctl)"
     ]
   }
 }
