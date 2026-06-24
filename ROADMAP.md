@@ -756,6 +756,7 @@ saldo reale della banca.
   - `CATEGORY_KEYWORDS` + `suggest_category_name` — suggerimento categoria basato su
     parole chiave nella descrizione del movimento (farmacia, supermercati, ristoranti,
     Amazon, utenze, stipendio, prelievi, ecc.)
+
   - `compute_import_hash` — hash SHA256 di `(account_id, data, importo, descrizione)`
     usato per la deduplica
   - `parse_mediobanca_csv` — parsing del CSV (delimitatore `;`, colonne `Data

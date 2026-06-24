@@ -1,7 +1,7 @@
 from datetime import date, datetime, timezone
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.recurring_transaction import RecurringTransaction
@@ -14,6 +14,11 @@ INTERVALS = {
     "bimonthly": relativedelta(months=2),
     "quarterly": relativedelta(months=3),
 }
+
+# Chiave arbitraria per il lock Postgres che serializza process_due_recurring tra i
+# worker uvicorn: senza, due worker che eseguono il job nello stesso istante (es. al
+# cron delle 00:10) leggono lo stesso last_run_date e generano transazioni duplicate.
+_RECURRING_JOB_LOCK_KEY = 727_001
 
 
 def next_raw_date(rt: RecurringTransaction) -> date | None:
@@ -31,35 +36,39 @@ def next_raw_date(rt: RecurringTransaction) -> date | None:
 async def process_due_recurring(db: AsyncSession) -> None:
     """Genera le transazioni per tutte le occorrenze di ricorrenze attive la cui data
     (eventualmente spostata al primo giorno lavorativo) è oggi o nel passato."""
-    today = date.today()
-    result = await db.execute(
-        select(RecurringTransaction).where(RecurringTransaction.is_active == True)
-    )
-    recurrences = result.scalars().all()
+    await db.execute(text("SELECT pg_advisory_lock(:key)"), {"key": _RECURRING_JOB_LOCK_KEY})
+    try:
+        today = date.today()
+        result = await db.execute(
+            select(RecurringTransaction).where(RecurringTransaction.is_active == True)
+        )
+        recurrences = result.scalars().all()
 
-    for rt in recurrences:
-        while True:
-            raw = next_raw_date(rt)
-            if raw is None:
-                break
-            shifted = next_business_day(raw)
-            if shifted > today:
-                break
+        for rt in recurrences:
+            while True:
+                raw = next_raw_date(rt)
+                if raw is None:
+                    break
+                shifted = next_business_day(raw)
+                if shifted > today:
+                    break
 
-            tx = Transaction(
-                user_id=rt.user_id,
-                account_id=rt.account_id,
-                category_id=rt.category_id,
-                amount=rt.amount,
-                type=rt.type,
-                note=rt.description,
-                date=datetime(shifted.year, shifted.month, shifted.day, 9, 0, 0, tzinfo=timezone.utc),
-            )
-            db.add(tx)
+                tx = Transaction(
+                    user_id=rt.user_id,
+                    account_id=rt.account_id,
+                    category_id=rt.category_id,
+                    amount=rt.amount,
+                    type=rt.type,
+                    note=rt.description,
+                    date=datetime(shifted.year, shifted.month, shifted.day, 9, 0, 0, tzinfo=timezone.utc),
+                )
+                db.add(tx)
 
-            rt.last_run_date = raw
+                rt.last_run_date = raw
 
-    await db.commit()
+        await db.commit()
+    finally:
+        await db.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": _RECURRING_JOB_LOCK_KEY})
 
 
 def projected_occurrences_in_range(rt: RecurringTransaction, start: date, end: date, today: date) -> list[date]:
