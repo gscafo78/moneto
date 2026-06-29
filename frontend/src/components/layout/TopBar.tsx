@@ -11,10 +11,9 @@ import PeriodPanel from './PeriodPanel'
 dayjs.locale('it')
 
 export default function TopBar() {
-  const { mode, date, prev, next, isAtPresent, getRange } = useDateStore()
+  const { mode, date, prev, next, getRange } = useDateStore()
   const { user, logout } = useAuthStore()
   const { start, end } = getRange()
-  const isNow = isAtPresent()
 
   let label: string
   if (mode === 'month') label = dayjs(date).format('MMMM YYYY')
@@ -26,7 +25,7 @@ export default function TopBar() {
   const periodRef = useRef<HTMLDivElement>(null)
 
   const swipeHandlers = useSwipe({
-    onSwipeLeft:  () => { if (!isNow) next() },
+    onSwipeLeft:  next,
     onSwipeRight: prev,
     threshold: 60,
   })
@@ -62,7 +61,7 @@ export default function TopBar() {
       <div className="flex items-center">
         <button
           onClick={next}
-          disabled={isNow}
+          disabled={mode === 'custom'}
           className="p-2.5 rounded-full active:bg-white/10 transition-colors disabled:opacity-30 min-w-[44px] min-h-[44px] flex items-center justify-center"
         >
           <ChevronRight size={22} className="text-white/60" />

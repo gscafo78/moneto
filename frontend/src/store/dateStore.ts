@@ -15,7 +15,6 @@ interface DateState {
   prev: () => void
   next: () => void
   setCustomRange: (start: Date, end: Date) => void
-  isAtPresent: () => boolean
   getRange: () => { start: Date; end: Date }
 }
 
@@ -35,23 +34,11 @@ export const useDateStore = create<DateState>((set, get) => ({
 
   next: () => {
     const { mode, date } = get()
-    if (mode === 'week') {
-      const nxt = dayjs(date).add(1, 'week')
-      if (!nxt.startOf('isoWeek').isAfter(dayjs().startOf('isoWeek'))) set({ date: nxt.toDate() })
-    } else if (mode === 'month') {
-      const nxt = dayjs(date).add(1, 'month')
-      if (!nxt.isAfter(dayjs(), 'month')) set({ date: nxt.toDate() })
-    }
+    if (mode === 'week') set({ date: dayjs(date).add(1, 'week').toDate() })
+    else if (mode === 'month') set({ date: dayjs(date).add(1, 'month').toDate() })
   },
 
   setCustomRange: (start, end) => set({ mode: 'custom', customStart: start, customEnd: end }),
-
-  isAtPresent: () => {
-    const { mode, date } = get()
-    if (mode === 'month') return dayjs(date).isSame(dayjs(), 'month')
-    if (mode === 'week') return dayjs(date).startOf('isoWeek').isSame(dayjs().startOf('isoWeek'), 'day')
-    return true
-  },
 
   getRange: () => {
     const { mode, date, customStart, customEnd } = get()
