@@ -10,6 +10,7 @@ import { transactionsApi, type Transaction, type TxType } from '../../api/transa
 import { categoriesApi } from '../../api/categories'
 import { accountsApi } from '../../api/accounts'
 import { useCurrency } from '../../hooks/useCurrency'
+import { useAuthStore } from '../../store/authStore'
 
 interface Props {
   open: boolean
@@ -31,6 +32,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   const cur = useCurrency()
   const { val, amount, press, reset } = useNumpad()
   const isEdit = !!transaction
+  const defaultAccountId = useAuthStore(s => s.user?.default_account_id)
 
   const [type, setType]     = useState<TxType>('expense')
   const [catId, setCatId]   = useState<string>('')
@@ -70,12 +72,12 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       reset()
       setType('expense')
       setCatId('')
-      setAccId('')
+      setAccId(defaultAccountId ?? '')
       setNote('')
       setDate(dayjs().format('YYYY-MM-DD'))
     }
     setActiveField(null)
-  }, [open, transaction])
+  }, [open, transaction, defaultAccountId])
 
   const finalAmount = isVoucherAccount ? amount * voucherValue : amount
   const voucherQuantity = isVoucherAccount ? amount : null
