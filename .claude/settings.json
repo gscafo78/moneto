@@ -34,7 +34,8 @@
       "Bash(find /etc/systemd/system -iname \"*celery*\" -o -iname \"*nextfolio*\" 2>/dev/null)",
       "Read(//etc/systemd/system/**)",
       "Bash(command -v docker pm2 supervisorctl systemctl)",
-      "Bash(curl -s http://localhost:6080/assets/index-BdL6EAaa.js)"
+      "Bash(curl -s http://localhost:6080/assets/index-BdL6EAaa.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:6080/)"
     ]
   }
 }

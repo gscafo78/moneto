@@ -5,6 +5,7 @@ export type TxType = 'expense' | 'income' | 'transfer'
 export interface Transaction {
   id: string
   account_id: string
+  to_account_id?: string | null
   category_id: string | null
   amount: number
   type: TxType
@@ -15,6 +16,7 @@ export interface Transaction {
 
 export interface TransactionCreate {
   account_id: string
+  to_account_id?: string
   category_id?: string
   amount: number
   type: TxType
@@ -25,6 +27,7 @@ export interface TransactionCreate {
 
 export interface TransactionUpdate {
   account_id?: string
+  to_account_id?: string | null
   category_id?: string | null
   amount?: number
   type?: TxType

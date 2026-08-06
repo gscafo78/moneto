@@ -18,7 +18,7 @@ interface Props {
   transaction?: Transaction | null
 }
 
-type Field = 'amount' | 'category' | 'account' | 'note' | 'date' | null
+type Field = 'amount' | 'category' | 'account' | 'to_account' | 'note' | 'date' | null
 
 function fmtAmount(val: string) {
   return parseFloat(val || '0').toLocaleString('it-IT', {
@@ -34,16 +34,18 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   const isEdit = !!transaction
   const defaultAccountId = useAuthStore(s => s.user?.default_account_id)
 
-  const [type, setType]     = useState<TxType>('expense')
-  const [catId, setCatId]   = useState<string>('')
-  const [accId, setAccId]   = useState<string>('')
-  const [note, setNote]     = useState('')
-  const [date, setDate]     = useState(dayjs().format('YYYY-MM-DD'))
+  const [type, setType]       = useState<TxType>('expense')
+  const [catId, setCatId]     = useState<string>('')
+  const [accId, setAccId]     = useState<string>('')
+  const [toAccId, setToAccId] = useState<string>('')
+  const [note, setNote]       = useState('')
+  const [date, setDate]       = useState(dayjs().format('YYYY-MM-DD'))
 
   const [activeField, setActiveField] = useState<Field>(null)
   const draft = useNumpad()
   const [draftCatId, setDraftCatId]   = useState('')
   const [draftAccId, setDraftAccId]   = useState('')
+  const [draftToAccId, setDraftToAccId] = useState('')
   const [draftNote, setDraftNote]     = useState('')
   const [draftDate, setDraftDate]     = useState('')
 
@@ -53,6 +55,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   const filteredCats = categories.filter(c => c.type === type || type === 'transfer')
   const selectedCat = categories.find(c => c.id === catId)
   const selectedAcc = accounts.find(a => a.id === accId) ?? accounts[0]
+  const selectedToAcc = accounts.find(a => a.id === toAccId)
 
   const isVoucherAccount = !!(selectedAcc?.meal_voucher_value)
   const voucherValue = selectedAcc?.meal_voucher_value ?? 0
@@ -66,6 +69,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       setType(transaction.type)
       setCatId(transaction.category_id ?? '')
       setAccId(transaction.account_id)
+      setToAccId(transaction.to_account_id ?? '')
       setNote(transaction.note ?? '')
       setDate(dayjs(transaction.date).format('YYYY-MM-DD'))
     } else {
@@ -73,6 +77,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       setType('expense')
       setCatId('')
       setAccId(defaultAccountId ?? '')
+      setToAccId('')
       setNote('')
       setDate(dayjs().format('YYYY-MM-DD'))
     }
@@ -85,8 +90,9 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   const mutation = useMutation({
     mutationFn: () => isEdit
       ? transactionsApi.update(transaction!.id, {
-          account_id:  accId || accounts[0]?.id,
-          category_id: catId || null,
+          account_id:    accId || accounts[0]?.id,
+          to_account_id: type === 'transfer' ? (toAccId || undefined) : null,
+          category_id:   catId || null,
           amount: finalAmount,
           type,
           note:  note || null,
@@ -94,8 +100,9 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
           voucher_quantity: voucherQuantity,
         })
       : transactionsApi.create({
-          account_id:  accId || accounts[0]?.id,
-          category_id: catId || undefined,
+          account_id:    accId || accounts[0]?.id,
+          to_account_id: type === 'transfer' ? (toAccId || undefined) : undefined,
+          category_id:   catId || undefined,
           amount: finalAmount,
           type,
           note:  note || undefined,
@@ -116,11 +123,12 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   }
 
   function openField(field: Field) {
-    if (field === 'amount')   draft.reset(val)
-    if (field === 'category') setDraftCatId(catId)
-    if (field === 'account')  setDraftAccId(accId || selectedAcc?.id || '')
-    if (field === 'note')     setDraftNote(note)
-    if (field === 'date')     setDraftDate(date)
+    if (field === 'amount')     draft.reset(val)
+    if (field === 'category')   setDraftCatId(catId)
+    if (field === 'account')    setDraftAccId(accId || selectedAcc?.id || '')
+    if (field === 'to_account') setDraftToAccId(toAccId)
+    if (field === 'note')       setDraftNote(note)
+    if (field === 'date')       setDraftDate(date)
     setActiveField(field)
   }
 
@@ -132,12 +140,13 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       if (!!(newAcc?.meal_voucher_value) !== isVoucherAccount) reset('0')
       setAccId(draftAccId)
     }
-    if (activeField === 'note')     setNote(draftNote)
-    if (activeField === 'date')     setDate(draftDate)
+    if (activeField === 'to_account') setToAccId(draftToAccId)
+    if (activeField === 'note')       setNote(draftNote)
+    if (activeField === 'date')       setDate(draftDate)
     setActiveField(null)
   }
 
-  const canSave = amount > 0 && (accId || accounts.length > 0)
+  const canSave = amount > 0 && (accId || accounts.length > 0) && (type !== 'transfer' || (!!toAccId && toAccId !== accId))
 
   return (
     <BottomSheet open={open} onClose={handleClose}>
@@ -186,7 +195,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
 
         {accounts.length > 0 ? (
           <FieldRow
-            label="Conto"
+            label={type === 'transfer' ? 'Conto di prelievo' : 'Conto'}
             value={selectedAcc ? `${selectedAcc.icon} ${selectedAcc.name}` : undefined}
             placeholder="Seleziona conto"
             onClick={() => openField('account')}
@@ -195,6 +204,15 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
           <p className="text-sm text-white/40 text-center py-2">
             Crea prima un conto dalla sezione Conti.
           </p>
+        )}
+
+        {type === 'transfer' && accounts.length > 0 && (
+          <FieldRow
+            label="Conto di destinazione"
+            value={selectedToAcc ? `${selectedToAcc.icon} ${selectedToAcc.name}` : undefined}
+            placeholder="Seleziona conto di destinazione"
+            onClick={() => openField('to_account')}
+          />
         )}
 
         <FieldRow
@@ -285,7 +303,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
       {/* Dialog: Conto */}
       <FieldDialog
         open={activeField === 'account'}
-        title="Conto"
+        title={type === 'transfer' ? 'Conto di prelievo' : 'Conto'}
         onCancel={() => setActiveField(null)}
         onConfirm={confirmField}
       >
@@ -295,6 +313,28 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
               key={a.id}
               onClick={() => setDraftAccId(a.id)}
               className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition ${draftAccId === a.id ? 'bg-brand/20 ring-1 ring-brand' : 'bg-surface-overlay'}`}
+            >
+              <span className="text-lg">{a.icon}</span>
+              <span>{a.name}</span>
+            </button>
+          ))}
+        </div>
+      </FieldDialog>
+
+      {/* Dialog: Conto di destinazione (solo trasferimenti) */}
+      <FieldDialog
+        open={activeField === 'to_account'}
+        title="Conto di destinazione"
+        onCancel={() => setActiveField(null)}
+        onConfirm={confirmField}
+        canConfirm={!!draftToAccId && draftToAccId !== accId}
+      >
+        <div className="space-y-1.5 pb-2">
+          {accounts.filter(a => a.id !== accId).map(a => (
+            <button
+              key={a.id}
+              onClick={() => setDraftToAccId(a.id)}
+              className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition ${draftToAccId === a.id ? 'bg-brand/20 ring-1 ring-brand' : 'bg-surface-overlay'}`}
             >
               <span className="text-lg">{a.icon}</span>
               <span>{a.name}</span>

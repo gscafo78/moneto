@@ -3,7 +3,7 @@ from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import extract, select
+from sqlalchemy import extract, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from decimal import Decimal
@@ -19,6 +19,7 @@ router = APIRouter()
 
 class TransactionCreate(BaseModel):
     account_id: str
+    to_account_id: Optional[str] = None
     category_id: Optional[str] = None
     amount: float
     type: Literal["expense", "income", "transfer"]
@@ -29,6 +30,7 @@ class TransactionCreate(BaseModel):
 
 class TransactionUpdate(BaseModel):
     account_id: Optional[str] = None
+    to_account_id: Optional[str] = None
     category_id: Optional[str] = None
     amount: Optional[float] = None
     type: Optional[Literal["expense", "income", "transfer"]] = None
@@ -40,6 +42,7 @@ class TransactionUpdate(BaseModel):
 class TransactionOut(BaseModel):
     id: str
     account_id: str
+    to_account_id: Optional[str] = None
     category_id: Optional[str]
     amount: float
     type: str
@@ -52,6 +55,7 @@ def _out(t: Transaction) -> TransactionOut:
     return TransactionOut(
         id=str(t.id),
         account_id=str(t.account_id),
+        to_account_id=str(t.to_account_id) if t.to_account_id else None,
         category_id=str(t.category_id) if t.category_id else None,
         amount=float(t.amount),
         type=t.type,
@@ -90,7 +94,12 @@ async def list_transactions(
             extract("month", Transaction.date) == month,
         )
     if account_id:
-        q = q.where(Transaction.account_id == account_id)
+        q = q.where(
+            or_(
+                Transaction.account_id == account_id,
+                (Transaction.type == "transfer") & (Transaction.to_account_id == account_id),
+            )
+        )
     q = q.order_by(Transaction.date.desc())
     result = await db.execute(q)
     return [_out(t) for t in result.scalars()]
@@ -102,6 +111,11 @@ async def create_transaction(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if data.type == "transfer" and not data.to_account_id:
+        raise HTTPException(status_code=422, detail="to_account_id obbligatorio per i trasferimenti")
+    if data.type == "transfer" and data.to_account_id == data.account_id:
+        raise HTTPException(status_code=422, detail="Il conto di prelievo e di destinazione devono essere diversi")
+
     tx_date = data.date or datetime.utcnow()
     amount = data.amount
     if data.voucher_quantity is not None:
@@ -112,6 +126,7 @@ async def create_transaction(
     tx = Transaction(
         user_id=user.id,
         account_id=data.account_id,
+        to_account_id=data.to_account_id if data.type == "transfer" else None,
         category_id=data.category_id,
         amount=amount,
         type=data.type,
