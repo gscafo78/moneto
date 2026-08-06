@@ -31,8 +31,8 @@ export const authApi = {
     return data
   },
 
-  async register(email: string, password: string, name: string): Promise<TokenResponse> {
-    const { data } = await api.post<TokenResponse>('/auth/register', { email, password, name })
+  async register(email: string, password: string, name: string, invite_token?: string): Promise<TokenResponse> {
+    const { data } = await api.post<TokenResponse>('/auth/register', { email, password, name, invite_token })
     return data
   },
 
@@ -105,6 +105,25 @@ export interface SmtpSettingsUpdate {
   smtp_tls?: boolean | null
 }
 
+export interface InviteOut {
+  id: string
+  token: string
+  url: string
+  expires_at: string
+  used_at: string | null
+  used_by_email: string | null
+  created_at: string
+}
+
+export interface AdminUserOut {
+  id: string
+  email: string
+  name: string | null
+  is_admin: boolean
+  email_verified: boolean
+  created_at: string | null
+}
+
 export const adminApi = {
   async getRegistrationSetting(): Promise<{ allow_registration: boolean }> {
     const { data } = await api.get<{ allow_registration: boolean }>('/auth/admin/registration')
@@ -114,6 +133,34 @@ export const adminApi = {
   async setRegistrationSetting(allow_registration: boolean): Promise<{ allow_registration: boolean }> {
     const { data } = await api.patch<{ allow_registration: boolean }>('/auth/admin/registration', { allow_registration })
     return data
+  },
+
+  async createInvite(): Promise<InviteOut> {
+    const { data } = await api.post<InviteOut>('/auth/admin/invites')
+    return data
+  },
+
+  async listInvites(): Promise<InviteOut[]> {
+    const { data } = await api.get<InviteOut[]>('/auth/admin/invites')
+    return data
+  },
+
+  async revokeInvite(id: string): Promise<void> {
+    await api.delete(`/auth/admin/invites/${id}`)
+  },
+
+  async listUsers(): Promise<AdminUserOut[]> {
+    const { data } = await api.get<AdminUserOut[]>('/auth/admin/users')
+    return data
+  },
+
+  async setUserRole(id: string, is_admin: boolean): Promise<AdminUserOut> {
+    const { data } = await api.patch<AdminUserOut>(`/auth/admin/users/${id}`, { is_admin })
+    return data
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    await api.delete(`/auth/admin/users/${id}`)
   },
 
   async getSmtpSettings(): Promise<SmtpSettings> {

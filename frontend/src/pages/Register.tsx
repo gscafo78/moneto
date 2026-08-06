@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Coins, Eye, EyeOff } from 'lucide-react'
 import { authApi } from '../api/auth'
 import { useAuthStore } from '../store/authStore'
@@ -7,6 +7,8 @@ import { useAuthStore } from '../store/authStore'
 export default function Register() {
   const navigate  = useNavigate()
   const setTokens = useAuthStore(s => s.setTokens)
+  const [params]  = useSearchParams()
+  const inviteToken = params.get('invite_token') ?? ''
 
   const [name,     setName]     = useState('')
   const [email,    setEmail]    = useState('')
@@ -24,7 +26,7 @@ export default function Register() {
     }
     setLoading(true)
     try {
-      const res = await authApi.register(email, password, name)
+      const res = await authApi.register(email, password, name, inviteToken || undefined)
       if (res.access_token && res.refresh_token) {
         await setTokens(res.access_token, res.refresh_token)
         navigate('/', { replace: true })

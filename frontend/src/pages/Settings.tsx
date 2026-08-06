@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ShieldCheck, ShieldOff, LogOut, Mail, User as UserIcon, Coins, Wallet, AlertTriangle, Lock, KeyRound, Send, Server } from 'lucide-react'
+import { ShieldCheck, ShieldOff, LogOut, Mail, User as UserIcon, Coins, Wallet, AlertTriangle, Lock, KeyRound, Send, Server, Link2, Users } from 'lucide-react'
 import QRCode from 'react-qr-code'
 import { mfaApi, authApi, adminApi } from '../api/auth'
 import { accountsApi } from '../api/accounts'
 import { useAuthStore } from '../store/authStore'
 import { CURRENCIES } from '../utils/currency'
+import InviteLinkSheet from '../components/settings/InviteLinkSheet'
+import UserManagementSheet from '../components/settings/UserManagementSheet'
 
 interface HealthInfo {
   status: string
@@ -80,6 +82,12 @@ export default function Settings() {
   // Amministrazione: toggle registrazione pubblica
   const [allowRegistration, setAllowRegistration] = useState<boolean | null>(null)
   const [registrationLoading, setRegistrationLoading] = useState(false)
+
+  // Amministrazione: link di invito
+  const [inviteSheetOpen, setInviteSheetOpen] = useState(false)
+
+  // Amministrazione: gestione utenti
+  const [userMgmtSheetOpen, setUserMgmtSheetOpen] = useState(false)
 
   useEffect(() => {
     if (!user?.is_admin) return
@@ -512,6 +520,42 @@ export default function Settings() {
             </button>
           </div>
 
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/10">
+                <Link2 size={18} className="text-white/40" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Link di invito</p>
+                <p className="text-xs text-white/40">Genera un link valido 24h per un singolo utente</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setInviteSheetOpen(true)}
+              className="text-sm font-medium px-3 py-2 rounded-lg hover:bg-white/5 transition text-brand"
+            >
+              Gestisci
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/10">
+                <Users size={18} className="text-white/40" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Gestione utenti</p>
+                <p className="text-xs text-white/40">Promuovi, retrocedi o elimina un account</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setUserMgmtSheetOpen(true)}
+              className="text-sm font-medium px-3 py-2 rounded-lg hover:bg-white/5 transition text-brand"
+            >
+              Gestisci
+            </button>
+          </div>
+
           {/* Configurazione SMTP */}
           <form onSubmit={saveSmtpSettings} className="space-y-3 pt-3 border-t border-white/10">
             <p className="text-sm font-medium">Invio email (SMTP)</p>
@@ -641,6 +685,9 @@ export default function Settings() {
       </section>
 
       <p className="text-center text-xs text-white/20 pb-4">Moneto v{__APP_VERSION__}</p>
+
+      <InviteLinkSheet open={inviteSheetOpen} onClose={() => setInviteSheetOpen(false)} />
+      <UserManagementSheet open={userMgmtSheetOpen} onClose={() => setUserMgmtSheetOpen(false)} />
     </div>
   )
 }

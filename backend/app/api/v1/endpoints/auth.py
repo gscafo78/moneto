@@ -2,7 +2,8 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, delete
+from sqlalchemy.orm import selectinload
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from app.core.config import settings
@@ -10,6 +11,8 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.account import Account
 from app.models.app_settings import AppSettings
+from app.models.invite import Invite
+from app.models.recurring_transaction import RecurringTransaction
 from app.services.email import (
     send_verification_email,
     send_password_reset_email,
@@ -28,6 +31,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 VERIFICATION_TOKEN_HOURS = 24
 RESET_TOKEN_HOURS = 1
+INVITE_TOKEN_HOURS = 24
 
 
 async def _get_app_settings(db: AsyncSession) -> AppSettings:
@@ -47,6 +51,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str | None = None
+    invite_token: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -126,12 +131,51 @@ class SmtpSettingsUpdate(BaseModel):
     smtp_tls: bool | None = None
 
 
+class InviteOut(BaseModel):
+    id: str
+    token: str
+    url: str
+    expires_at: datetime
+    used_at: datetime | None = None
+    used_by_email: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminUserOut(BaseModel):
+    id: str
+    email: str
+    name: str | None
+    is_admin: bool
+    email_verified: bool
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class UpdateUserRoleRequest(BaseModel):
+    is_admin: bool
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _tokens(user: User, remember_me: bool = False) -> TokenResponse:
     return TokenResponse(
         access_token=create_access_token(str(user.id), remember_me=remember_me),
         refresh_token=create_refresh_token(str(user.id), remember_me=remember_me),
+    )
+
+
+def _invite_out(invite: Invite) -> InviteOut:
+    return InviteOut(
+        id=str(invite.id),
+        token=invite.token,
+        url=f"{settings.FRONTEND_URL}/register?invite_token={invite.token}",
+        expires_at=invite.expires_at,
+        used_at=invite.used_at,
+        used_by_email=invite.used_by_email,
+        created_at=invite.created_at,
     )
 
 
@@ -154,9 +198,25 @@ async def register(data: UserCreate, background_tasks: BackgroundTasks, db: Asyn
     count_result = await db.execute(select(User))
     has_users = count_result.scalars().first() is not None
 
-    # Blocca la registrazione se ci sono già utenti e la registrazione pubblica è disabilitata
+    # Risolve un eventuale link di invito (bypassa il gate globale se valido)
+    invite: Invite | None = None
+    if data.invite_token:
+        invite_result = await db.execute(
+            select(Invite).where(Invite.token == data.invite_token).with_for_update()
+        )
+        invite = invite_result.scalar_one_or_none()
+        if not invite or invite.used_at or invite.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Link di invito non valido o scaduto")
+
+    # Blocca la registrazione se ci sono già utenti, la registrazione pubblica è
+    # disabilitata e non è stato fornito un invito valido
     app_settings = await _get_app_settings(db)
-    if has_users and not settings.ALLOW_REGISTRATION and not app_settings.allow_registration:
+    if (
+        has_users
+        and not settings.ALLOW_REGISTRATION
+        and not app_settings.allow_registration
+        and invite is None
+    ):
         raise HTTPException(
             status_code=403,
             detail="La registrazione pubblica è disabilitata. Contatta l'amministratore.",
@@ -177,6 +237,11 @@ async def register(data: UserCreate, background_tasks: BackgroundTasks, db: Asyn
         verification_token_expires=datetime.now(timezone.utc) + timedelta(hours=VERIFICATION_TOKEN_HOURS),
     )
     db.add(user)
+
+    if invite is not None:
+        invite.used_at = datetime.now(timezone.utc)
+        invite.used_by_email = user.email
+
     await db.commit()
     await db.refresh(user)
     background_tasks.add_task(send_verification_email, user.email, verification_token)
@@ -225,6 +290,17 @@ def _user_out(user: User) -> UserOut:
         default_account_id=str(user.default_account_id) if user.default_account_id else None,
         email_verified=user.email_verified,
         is_admin=user.is_admin,
+    )
+
+
+def _admin_user_out(user: User) -> AdminUserOut:
+    return AdminUserOut(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        is_admin=user.is_admin,
+        email_verified=user.email_verified,
+        created_at=user.created_at,
     )
 
 
@@ -367,6 +443,130 @@ async def set_registration_setting(
     app_settings.allow_registration = data.allow_registration
     await db.commit()
     return RegistrationSetting(allow_registration=app_settings.allow_registration)
+
+
+@router.post("/admin/invites", response_model=InviteOut, status_code=201)
+async def create_invite(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso riservato agli amministratori")
+    invite = Invite(
+        token=secrets.token_urlsafe(32),
+        created_by=current_user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=INVITE_TOKEN_HOURS),
+    )
+    db.add(invite)
+    await db.commit()
+    await db.refresh(invite)
+    return _invite_out(invite)
+
+
+@router.get("/admin/invites", response_model=list[InviteOut])
+async def list_invites(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso riservato agli amministratori")
+    result = await db.execute(select(Invite).order_by(Invite.created_at.desc()))
+    invites = result.scalars().all()
+    return [_invite_out(i) for i in invites]
+
+
+@router.delete("/admin/invites/{invite_id}", status_code=204)
+async def revoke_invite(
+    invite_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso riservato agli amministratori")
+    result = await db.execute(select(Invite).where(Invite.id == invite_id))
+    invite = result.scalar_one_or_none()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invito non trovato")
+    if invite.used_at:
+        raise HTTPException(status_code=400, detail="Invito già utilizzato, non revocabile")
+    await db.delete(invite)
+    await db.commit()
+
+
+@router.get("/admin/users", response_model=list[AdminUserOut])
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso riservato agli amministratori")
+    result = await db.execute(select(User).order_by(User.is_admin.desc(), User.created_at.asc()))
+    return [_admin_user_out(u) for u in result.scalars().all()]
+
+
+@router.patch("/admin/users/{user_id}", response_model=AdminUserOut)
+async def update_user_role(
+    user_id: str,
+    data: UpdateUserRoleRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso riservato agli amministratori")
+    if user_id == str(current_user.id):
+        raise HTTPException(status_code=400, detail="Non puoi modificare il tuo stesso ruolo")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+
+    if target.is_admin and not data.is_admin:
+        count_result = await db.execute(select(func.count()).select_from(User).where(User.is_admin.is_(True)))
+        if count_result.scalar_one() <= 1:
+            raise HTTPException(status_code=400, detail="Impossibile rimuovere l'ultimo amministratore")
+
+    target.is_admin = data.is_admin
+    await db.commit()
+    await db.refresh(target)
+    return _admin_user_out(target)
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+async def delete_user(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Accesso riservato agli amministratori")
+    if user_id == str(current_user.id):
+        raise HTTPException(status_code=400, detail="Non puoi eliminare il tuo stesso account")
+
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.accounts), selectinload(User.categories), selectinload(User.transactions))
+        .where(User.id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+
+    if target.is_admin:
+        count_result = await db.execute(select(func.count()).select_from(User).where(User.is_admin.is_(True)))
+        if count_result.scalar_one() <= 1:
+            raise HTTPException(status_code=400, detail="Impossibile eliminare l'ultimo amministratore")
+
+    # Le Invite create da questo utente non hanno cascade a DB: vanno rimosse esplicitamente
+    await db.execute(delete(Invite).where(Invite.created_by == target.id))
+
+    # Le transazioni ricorrenti referenziano anche account_id (senza ondelete): vanno
+    # rimosse esplicitamente prima che il cascade ORM su User.accounts cancelli i conti,
+    # altrimenti la DELETE sugli account viola la FK recurring_transactions_account_id_fkey
+    await db.execute(delete(RecurringTransaction).where(RecurringTransaction.user_id == target.id))
+
+    await db.delete(target)
+    await db.commit()
 
 
 def _smtp_out(app_settings: AppSettings) -> SmtpSettingsOut:
