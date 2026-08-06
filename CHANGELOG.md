@@ -1,10 +1,10 @@
 # Changelog
 
-Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
+All notable changes to this project are documented in this file.
 
-Il formato è basato su [Keep a Changelog](https://keepachangelog.com/it/1.0.0/),
-e questo progetto segue il [Semantic Versioning](https://semver.org/lang/it/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] — 2026-06-22
 ### Added
-- Avvio del tracking formale delle versioni (Moneto era già in produzione).
+- Started formal version tracking (Moneto was already in production).

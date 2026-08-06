@@ -1,87 +1,87 @@
-# Budget App — Roadmap di sviluppo
+# Moneto — Development Roadmap
 
-Questa roadmap guida lo sviluppo di una web app di gestione spese personali stile Monefy,
-self-hosted su VPS, ottimizzata per smartphone, con supporto desktop.
+This roadmap guides the development of a personal expense management web app in the style of Monefy,
+self-hosted on a VPS, optimized for smartphones, with desktop support.
 
 **Stack**: FastAPI + PostgreSQL (backend) · React 18 + Vite + Tailwind CSS (frontend)  
-**Infra**: Docker Compose (dev e prod) · Cloudflare come reverse proxy esterno  
-**Dev workflow**: `docker compose up` sulla VPS, accesso via SSH port forwarding
+**Infra**: Docker Compose (dev and prod) · Cloudflare as external reverse proxy  
+**Dev workflow**: `docker compose up` on the VPS, access via SSH port forwarding
 
 ---
 
-## Come usare questa roadmap con Claude in VS Code
+## How to use this roadmap with Claude in VS Code
 
-Ogni milestone è un task autonomo. Per iniziare una milestone, incolla in chat:
-> "Lavora sulla **Milestone X** della ROADMAP.md. Leggi i file esistenti prima di scrivere codice."
+Each milestone is a self-contained task. To start a milestone, paste into chat:
+> "Work on **Milestone X** from ROADMAP.md. Read the existing files before writing code."
 
-Claude leggerà il codice esistente e implementerà solo ciò che manca.
+Claude will read the existing code and implement only what's missing.
 
 ---
 
-## Milestone 1 — Backend: autenticazione e modelli DB ✅
+## Milestone 1 — Backend: authentication and DB models ✅
 
-**Obiettivo**: API funzionante con auth JWT, modelli DB e migrazioni Alembic.
+**Objective**: working API with JWT auth, DB models and Alembic migrations.
 
-**Completato**:
+**Completed**:
 - ✅ `backend/alembic.ini` + `migrations/env.py` + `migrations/script.py.mako`
-- ✅ `migrations/versions/001_initial.py` — schema iniziale (users, accounts, categories, transactions)
+- ✅ `migrations/versions/001_initial.py` — initial schema (users, accounts, categories, transactions)
 - ✅ `app/core/security.py` — `create_access_token`, `create_refresh_token`, `create_mfa_session_token`, `decode_token`, `verify_access_token`, `get_current_user`
 - ✅ `app/core/config.py` — `ACCESS_TOKEN_EXPIRE_MINUTES=30`, `REFRESH_TOKEN_EXPIRE_DAYS=7`, `REMEMBER_ME_EXPIRE_DAYS=30`
 - ✅ `app/api/v1/endpoints/auth.py` — register, login (JSON body), refresh, me
 - ✅ `docker compose up` → `alembic upgrade head` → uvicorn
 - ✅ `bcrypt==3.2.2` + `pydantic[email]` + `psycopg2-binary` in requirements
 
-**Criteri verificati**:
+**Verified criteria**:
 - ✅ `POST /api/v1/auth/register` → `{access_token, refresh_token}`
 - ✅ `POST /api/v1/auth/login` (JSON `{email, password, remember_me}`) → `{access_token, refresh_token}`
-- ✅ `POST /api/v1/auth/refresh` → ruota entrambi i token, propaga `rem`
-- ✅ `GET /api/v1/auth/me` (token richiesto)
-- ✅ Tabelle create automaticamente allo startup via Alembic
+- ✅ `POST /api/v1/auth/refresh` → rotates both tokens, propagates `rem`
+- ✅ `GET /api/v1/auth/me` (token required)
+- ✅ Tables created automatically at startup via Alembic
 - ✅ `GET /health` → `{"status": "ok"}`
 
-**Durate token verificate**:
+**Verified token durations**:
 | Scenario | Access token | Refresh token |
 |---|---|---|
-| Senza "Ricordami" | 30 min | 7 giorni (`rem=false`) |
-| Con "Ricordami" | 24 h (30×48) | 30 giorni (`rem=true`) |
-| Refresh successivo | eredita da `rem` | eredita da `rem` |
+| Without "Remember me" | 30 min | 7 days (`rem=false`) |
+| With "Remember me" | 24 h (30×48) | 30 days (`rem=true`) |
+| Subsequent refresh | inherits from `rem` | inherits from `rem` |
 
 ---
 
-## Milestone 1.5 — MFA opzionale (TOTP — Google Authenticator / Authy)
+## Milestone 1.5 — Optional MFA (TOTP — Google Authenticator / Authy)
 
-**Obiettivo**: aggiungere autenticazione a due fattori opzionale con TOTP, seguendo lo stesso pattern di Nextfolio. L'utente attiva il 2FA dalle impostazioni; il login rimane email+password se il 2FA non è attivo.
+**Objective**: add optional two-factor authentication with TOTP, following the same pattern as Nextfolio. The user enables 2FA from settings; login remains email+password if 2FA is not enabled.
 
-### Flusso login con MFA attivo
+### Login flow with MFA enabled
 ```
 POST /auth/login  { email, password, remember_me: bool }
-  → se MFA disattivo:  { access_token, refresh_token }
-  → se MFA attivo:     { requires_mfa: true, session_token: "<JWT 5min>" }
+  → if MFA disabled:  { access_token, refresh_token }
+  → if MFA enabled:   { requires_mfa: true, session_token: "<JWT 5min>" }
 
 POST /auth/mfa/verify  { session_token, code, remember_me: bool }
   → { access_token, refresh_token }
 
 POST /auth/refresh  { refresh_token }
-  → { access_token, refresh_token }   ← flag rem propagato automaticamente
+  → { access_token, refresh_token }   ← rem flag propagated automatically
 ```
 
-**Durate token** (configurabili via env):
+**Token durations** (configurable via env):
 | Scenario | Access token | Refresh token |
 |---|---|---|
-| Senza "Ricordami" | 30 min | 7 giorni |
-| Con "Ricordami" | 24 h (30 min × 48) | 30 giorni (`REMEMBER_ME_EXPIRE_DAYS`) |
+| Without "Remember me" | 30 min | 7 days |
+| With "Remember me" | 24 h (30 min × 48) | 30 days (`REMEMBER_ME_EXPIRE_DAYS`) |
 
 ### 1.5.1 Backend
 
-**Migration `002_mfa`** — aggiunge colonne alla tabella `users`:
+**Migration `002_mfa`** — adds columns to the `users` table:
 ```sql
 ALTER TABLE users ADD COLUMN totp_secret VARCHAR(64);
 ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT false;
 ```
 
-**File da creare**:
-- `backend/migrations/versions/002_mfa.py` — migration ALTER TABLE
-- `backend/app/services/totp.py` — wrapper `pyotp`:
+**Files to create**:
+- `backend/migrations/versions/002_mfa.py` — ALTER TABLE migration
+- `backend/app/services/totp.py` — `pyotp` wrapper:
   ```python
   def generate_secret() -> str          # pyotp.random_base32()
   def get_provisioning_uri(secret, email, issuer="Moneto") -> str
@@ -89,21 +89,21 @@ ALTER TABLE users ADD COLUMN totp_enabled BOOLEAN NOT NULL DEFAULT false;
   ```
 - `backend/app/api/v1/endpoints/mfa.py` — router `/auth/mfa/*`
 
-**Modello `User`** — aggiungere campi:
+**`User` model** — add fields:
 ```python
 totp_secret  = Column(String(64), nullable=True)
 totp_enabled = Column(Boolean, default=False, nullable=False)
 ```
 
-**`security.py`** — già implementato in M1 con remember_me:
+**`security.py`** — already implemented in M1 with remember_me:
 ```python
 create_access_token(user_id, remember_me)  # 30min / 24h
-create_refresh_token(user_id, remember_me) # 7gg / 30gg, rem nel payload
+create_refresh_token(user_id, remember_me) # 7d / 30d, rem in payload
 create_mfa_session_token(user_id)           # 5 min, type=mfa_session
 decode_token(token) -> dict
 ```
 
-**`auth.py` — login già aggiornato**:
+**`auth.py` — login already updated**:
 ```python
 if user.totp_enabled:
     return TokenResponse(requires_mfa=True,
@@ -111,283 +111,283 @@ if user.totp_enabled:
 return _tokens(user, remember_me=data.remember_me)
 ```
 
-**Nuovi endpoint**:
+**New endpoints**:
 ```
 POST /api/v1/auth/mfa/verify
      body: { session_token, code }
-     → decodifica session_token (type=mfa_session), verifica TOTP, restituisce access_token
+     → decodes session_token (type=mfa_session), verifies TOTP, returns access_token
 
-POST /api/v1/auth/mfa/setup       [autenticato]
-     → genera totp_secret, lo salva su DB (totp_enabled rimane false), restituisce { secret, uri }
+POST /api/v1/auth/mfa/setup       [authenticated]
+     → generates totp_secret, saves it to DB (totp_enabled stays false), returns { secret, uri }
 
-POST /api/v1/auth/mfa/enable      [autenticato]
-     body: { session_token, code }  ← session_token generato da /mfa/setup
-     → verifica TOTP, imposta totp_enabled=True
+POST /api/v1/auth/mfa/enable      [authenticated]
+     body: { session_token, code }  ← session_token generated by /mfa/setup
+     → verifies TOTP, sets totp_enabled=True
 
-POST /api/v1/auth/mfa/disable     [autenticato]
+POST /api/v1/auth/mfa/disable     [authenticated]
      body: { session_token, code }
-     → verifica TOTP, imposta totp_enabled=False, totp_secret=None
+     → verifies TOTP, sets totp_enabled=False, totp_secret=None
 ```
 
-**`requirements.txt`** — aggiungere:
+**`requirements.txt`** — add:
 ```
 pyotp==2.9.0
 ```
 
-**Criteri di completamento backend**:
-- Login senza MFA → `{ access_token }` (invariato)
-- Login con MFA → `{ requires_mfa: true, session_token }` (JWT 5min)
-- `POST /mfa/verify` con session_token valido + codice corretto → `{ access_token }`
-- `POST /mfa/verify` con codice sbagliato → 401
+**Backend completion criteria**:
+- Login without MFA → `{ access_token }` (unchanged)
+- Login with MFA → `{ requires_mfa: true, session_token }` (JWT 5min)
+- `POST /mfa/verify` with valid session_token + correct code → `{ access_token }`
+- `POST /mfa/verify` with wrong code → 401
 - `POST /mfa/setup` → secret + URI (QR)
-- `POST /mfa/enable` attiva 2FA sull'account
-- `POST /mfa/disable` disattiva 2FA sull'account
+- `POST /mfa/enable` enables 2FA on the account
+- `POST /mfa/disable` disables 2FA on the account
 
-### 1.5.2 Frontend (da implementare in Milestone 3)
+### 1.5.2 Frontend (to be implemented in Milestone 3)
 
-**Login a 2 step** — `pages/Login.tsx`:
+**2-step login** — `pages/Login.tsx`:
 ```
-Step 1: form email + password → POST /auth/login
-  se requires_mfa=true → step 2 (salva session_token in stato locale)
-Step 2: input codice 6 cifre → POST /auth/mfa/verify
-  successo → salva access_token → redirect home
+Step 1: email + password form → POST /auth/login
+  if requires_mfa=true → step 2 (save session_token in local state)
+Step 2: 6-digit code input → POST /auth/mfa/verify
+  success → save access_token → redirect home
 ```
 
-**Sezione MFA in Impostazioni** — `pages/Settings.tsx`:
-- Se MFA disattivo: bottone "Attiva 2FA"
-  1. `POST /mfa/setup` → riceve URI
-  2. Mostrare QR code (`react-qr-code`)
-  3. Campo codice + bottone "Verifica e attiva" → `POST /mfa/enable`
-- Se MFA attivo: badge "2FA attivo ✓" + bottone "Disattiva"
-  1. Campo codice + bottone "Disattiva" → `POST /mfa/disable`
+**MFA section in Settings** — `pages/Settings.tsx`:
+- If MFA disabled: "Enable 2FA" button
+  1. `POST /mfa/setup` → receives URI
+  2. Show QR code (`react-qr-code`)
+  3. Code field + "Verify and enable" button → `POST /mfa/enable`
+- If MFA enabled: "2FA enabled ✓" badge + "Disable" button
+  1. Code field + "Disable" button → `POST /mfa/disable`
 
-**Dipendenze frontend**:
+**Frontend dependencies**:
 ```
-react-qr-code   ← per mostrare il QR di provisioning
+react-qr-code   ← to display the provisioning QR
 ```
 
 ---
 
-## Milestone 2 — Backend: endpoint CRUD completi
+## Milestone 2 — Backend: complete CRUD endpoints
 
-**Obiettivo**: tutti gli endpoint REST per accounts, categories, transactions e stats.
+**Objective**: all REST endpoints for accounts, categories, transactions and stats.
 
-**File da completare**:
-- `backend/app/api/v1/endpoints/accounts.py` — CRUD completo
-- `backend/app/api/v1/endpoints/categories.py` — CRUD + seed categorie default al primo accesso
-- `backend/app/api/v1/endpoints/transactions.py` — CRUD + filtro per anno/mese + aggiornamento saldo conto
-- `backend/app/api/v1/endpoints/stats.py` — endpoint statistiche mensili
+**Files to complete**:
+- `backend/app/api/v1/endpoints/accounts.py` — complete CRUD
+- `backend/app/api/v1/endpoints/categories.py` — CRUD + seed default categories on first access
+- `backend/app/api/v1/endpoints/transactions.py` — CRUD + year/month filter + account balance update
+- `backend/app/api/v1/endpoints/stats.py` — monthly statistics endpoint
 
-**Endpoint da implementare**:
+**Endpoints to implement**:
 
 ```
 Accounts:
-  GET    /api/v1/accounts/          — lista conti dell'utente
-  POST   /api/v1/accounts/          — crea conto
-  PATCH  /api/v1/accounts/{id}      — modifica nome/icona/colore
+  GET    /api/v1/accounts/          — list user's accounts
+  POST   /api/v1/accounts/          — create account
+  PATCH  /api/v1/accounts/{id}      — edit name/icon/color
   DELETE /api/v1/accounts/{id}      — soft delete (is_active=False)
 
 Categories:
-  GET    /api/v1/categories/        — lista categorie (seed default se vuoto)
-  POST   /api/v1/categories/        — crea categoria custom
-  PATCH  /api/v1/categories/{id}    — modifica
+  GET    /api/v1/categories/        — list categories (seed default if empty)
+  POST   /api/v1/categories/        — create custom category
+  PATCH  /api/v1/categories/{id}    — edit
   DELETE /api/v1/categories/{id}    — soft delete
 
 Transactions:
-  GET    /api/v1/transactions/?year=YYYY&month=MM  — lista filtrata per mese
-  POST   /api/v1/transactions/      — crea transazione (aggiorna saldo conto)
-  DELETE /api/v1/transactions/{id}  — elimina (inverte saldo conto)
+  GET    /api/v1/transactions/?year=YYYY&month=MM  — list filtered by month
+  POST   /api/v1/transactions/      — create transaction (updates account balance)
+  DELETE /api/v1/transactions/{id}  — delete (reverses account balance)
 
 Stats:
   GET    /api/v1/stats/monthly?year=YYYY&month=MM
-         — risponde: { income, expenses, balance, by_category: [{id, name, icon, color, total}] }
+         — returns: { income, expenses, balance, by_category: [{id, name, icon, color, total}] }
   GET    /api/v1/stats/trend?months=6
-         — risponde: [{year, month, income, expenses}] ultimi N mesi
+         — returns: [{year, month, income, expenses}] for the last N months
 ```
 
-**Criteri di completamento**:
-- Tutti gli endpoint rispondono correttamente con Postman / curl
-- Ogni endpoint è protetto da `get_current_user` (eccetto auth)
-- La creazione di una transazione aggiorna `Account.balance`
-- L'eliminazione di una transazione inverte il saldo
-- La documentazione auto-generata `/api/docs` mostra tutti gli endpoint
+**Completion criteria**:
+- All endpoints respond correctly with Postman / curl
+- Every endpoint is protected by `get_current_user` (except auth)
+- Creating a transaction updates `Account.balance`
+- Deleting a transaction reverses the balance
+- The auto-generated documentation `/api/docs` shows all endpoints
 
-**Categorie default da creare al primo accesso utente**:
+**Default categories to create on first user access**:
 ```python
 DEFAULT_CATEGORIES = [
-    ("🍕", "Cibo & Ristoranti", "#ef4444", "expense"),
-    ("🚗", "Trasporti",         "#f97316", "expense"),
-    ("🏠", "Casa",              "#eab308", "expense"),
-    ("💊", "Salute",            "#22c55e", "expense"),
-    ("🎭", "Intrattenimento",   "#8b5cf6", "expense"),
-    ("👕", "Abbigliamento",     "#ec4899", "expense"),
-    ("📱", "Tecnologia",        "#06b6d4", "expense"),
-    ("🏋️", "Sport",             "#14b8a6", "expense"),
-    ("📚", "Istruzione",        "#a78bfa", "expense"),
-    ("✈️", "Viaggi",            "#f59e0b", "expense"),
-    ("💼", "Stipendio",         "#22c55e", "income"),
-    ("💰", "Entrate extra",     "#10b981", "income"),
-    ("🎁", "Regalo ricevuto",   "#f472b6", "income"),
+    ("🍕", "Food & Restaurants",  "#ef4444", "expense"),
+    ("🚗", "Transport",           "#f97316", "expense"),
+    ("🏠", "Home",                "#eab308", "expense"),
+    ("💊", "Health",              "#22c55e", "expense"),
+    ("🎭", "Entertainment",       "#8b5cf6", "expense"),
+    ("👕", "Clothing",            "#ec4899", "expense"),
+    ("📱", "Technology",          "#06b6d4", "expense"),
+    ("🏋️", "Sports",              "#14b8a6", "expense"),
+    ("📚", "Education",           "#a78bfa", "expense"),
+    ("✈️", "Travel",              "#f59e0b", "expense"),
+    ("💼", "Salary",              "#22c55e", "income"),
+    ("💰", "Extra income",        "#10b981", "income"),
+    ("🎁", "Gift received",       "#f472b6", "income"),
 ]
 ```
 
 ---
 
-## Milestone 3 — Frontend: autenticazione e scaffolding
+## Milestone 3 — Frontend: authentication and scaffolding
 
-**Obiettivo**: Login/Register funzionanti, routing con guard, layout base con bottom nav.
+**Objective**: working Login/Register, routing with guard, base layout with bottom nav.
 
-**File da creare / completare**:
-- `frontend/src/api/client.ts` — ✅ già presente (axios con interceptor JWT)
-- `frontend/src/api/auth.ts` — funzioni `login()`, `register()`, `me()`
-- `frontend/src/store/authStore.ts` — zustand store con `user`, `token`, `login()`, `logout()`
-- `frontend/src/pages/Login.tsx` — form login + link a register
-- `frontend/src/pages/Register.tsx` — form registrazione
-- `frontend/src/App.tsx` — ✅ già presente, collegare a authStore
-- `frontend/src/components/layout/Layout.tsx` — ✅ già presente
-- `frontend/src/components/layout/BottomNav.tsx` — ✅ già presente
-- `frontend/src/components/layout/TopBar.tsx` — ✅ già presente
+**Files to create / complete**:
+- `frontend/src/api/client.ts` — ✅ already present (axios with JWT interceptor)
+- `frontend/src/api/auth.ts` — `login()`, `register()`, `me()` functions
+- `frontend/src/store/authStore.ts` — zustand store with `user`, `token`, `login()`, `logout()`
+- `frontend/src/pages/Login.tsx` — login form + link to register
+- `frontend/src/pages/Register.tsx` — registration form
+- `frontend/src/App.tsx` — ✅ already present, connect to authStore
+- `frontend/src/components/layout/Layout.tsx` — ✅ already present
+- `frontend/src/components/layout/BottomNav.tsx` — ✅ already present
+- `frontend/src/components/layout/TopBar.tsx` — ✅ already present
 
-**Criteri di completamento**:
-- Login con email/password funziona, token salvato in localStorage
-- Login a 2 step se MFA attivo (credenziali → codice TOTP 6 cifre)
-- Utente non autenticato viene rediretto a `/login`
-- Logout pulisce il token e reindirizza a `/login`
-- Bottom nav con 4 tab: Home, Movimenti, Conti, Impostazioni
-- TopBar con navigazione mese (← Giugno 2025 →)
-- Il mese corrente non è avanzabile oltre oggi
-- Layout funziona sia su mobile (375px) che desktop (1200px)
+**Completion criteria**:
+- Login with email/password works, token saved to localStorage
+- 2-step login if MFA is enabled (credentials → 6-digit TOTP code)
+- Unauthenticated user is redirected to `/login`
+- Logout clears the token and redirects to `/login`
+- Bottom nav with 4 tabs: Home, Transactions, Accounts, Settings
+- TopBar with month navigation (← June 2025 →)
+- The current month cannot be advanced beyond today
+- Layout works on both mobile (375px) and desktop (1200px)
 
-**MFA nel login** (`pages/Login.tsx`):
+**MFA in login** (`pages/Login.tsx`):
 ```
-Step 1: form email + password
+Step 1: email + password form
   → POST /auth/login
-  → se { access_token }   → salva token → home
-  → se { requires_mfa: true, session_token } → step 2
+  → if { access_token }   → save token → home
+  → if { requires_mfa: true, session_token } → step 2
 
-Step 2: card con campo codice TOTP 6 cifre
+Step 2: card with 6-digit TOTP code field
   → POST /auth/mfa/verify { session_token, code }
-  → { access_token } → salva token → home
+  → { access_token } → save token → home
 ```
 
-**MFA nelle Impostazioni** (`pages/Settings.tsx`):
-- Sezione "Sicurezza" con stato MFA corrente
-- Se disattivo:
-  1. Bottone "Configura autenticazione a due fattori"
-  2. QR code (`react-qr-code`) + secret testuale
-  3. Campo codice + bottone "Attiva" → `POST /auth/mfa/enable`
-- Se attivo: badge verde + bottone "Disattiva" → `POST /auth/mfa/disable` (richiede codice)
+**MFA in Settings** (`pages/Settings.tsx`):
+- "Security" section with current MFA status
+- If disabled:
+  1. "Set up two-factor authentication" button
+  2. QR code (`react-qr-code`) + text secret
+  3. Code field + "Enable" button → `POST /auth/mfa/enable`
+- If enabled: green badge + "Disable" button → `POST /auth/mfa/disable` (requires code)
 
 **Design**:
-- Tema scuro: sfondo `#0f0f13`, card `#1a1a24`, bordi `white/10`
+- Dark theme: background `#0f0f13`, card `#1a1a24`, borders `white/10`
 - Accent color: indigo `#6366f1`
 - Font: Inter
-- Tap target minimo 44px per tutti i bottoni interattivi
-- `safe-area-inset-bottom` applicato alla bottom nav per iPhone con notch
+- Minimum tap target 44px for all interactive buttons
+- `safe-area-inset-bottom` applied to bottom nav for iPhone with notch
 
 ---
 
 ## Milestone 4 — Frontend: Dashboard
 
-**Obiettivo**: schermata principale con saldo, grafico a torta spese per categoria, riepilogo entrate/uscite.
+**Objective**: main screen with balance, pie chart of spending by category, income/expense summary.
 
-**File da creare**:
+**Files to create**:
 - `frontend/src/api/stats.ts` — `getMonthlySummary(year, month)`
 - `frontend/src/hooks/useMonthlyStats.ts` — TanStack Query wrapper
-- `frontend/src/pages/Dashboard.tsx` — pagina principale
-- `frontend/src/components/dashboard/SummaryBar.tsx` — barra entrate/uscite/saldo
-- `frontend/src/components/dashboard/SpendingChart.tsx` — grafico a torta Recharts
-- `frontend/src/components/dashboard/CategoryList.tsx` — lista categorie con importo e barra
-- `frontend/src/components/ui/AddTransactionButton.tsx` — bottone FAB (+) per aggiungere transazione
-- `frontend/src/components/transactions/AddTransactionSheet.tsx` — bottom sheet per inserimento rapido
+- `frontend/src/pages/Dashboard.tsx` — main page
+- `frontend/src/components/dashboard/SummaryBar.tsx` — income/expenses/balance bar
+- `frontend/src/components/dashboard/SpendingChart.tsx` — Recharts pie chart
+- `frontend/src/components/dashboard/CategoryList.tsx` — category list with amount and bar
+- `frontend/src/components/ui/AddTransactionButton.tsx` — FAB (+) button for adding a transaction
+- `frontend/src/components/transactions/AddTransactionSheet.tsx` — bottom sheet for quick entry
 
-**Layout Dashboard (mobile-first)**:
+**Dashboard layout (mobile-first)**:
 ```
 ┌─────────────────────────────┐
-│  ← Giugno 2025 →            │  ← TopBar (sticky)
+│  ← June 2025 →              │  ← TopBar (sticky)
 ├─────────────────────────────┤
-│  Entrate: €1.200            │
-│  Uscite:  €  847  Saldo: €353│  ← SummaryBar
+│  Income:  €1,200            │
+│  Expenses: € 847  Balance: €353│  ← SummaryBar
 ├─────────────────────────────┤
 │                             │
-│      [Grafico a torta]      │  ← SpendingChart (Recharts PieChart)
-│   (tocca una fetta per      │     con legenda sotto
-│    filtrare la lista)       │
+│      [Pie chart]            │  ← SpendingChart (Recharts PieChart)
+│   (tap a slice to           │     with legend below
+│    filter the list)         │
 │                             │
 ├─────────────────────────────┤
-│  🍕 Cibo          €320  ████│
-│  🚗 Trasporti     €180  ███ │  ← CategoryList
-│  🏠 Casa          €200  ███ │
+│  🍕 Food          €320  ████│
+│  🚗 Transport     €180  ███ │  ← CategoryList
+│  🏠 Home          €200  ███ │
 │  ...                        │
 └─────────────────────────────┘
-                    [+]         ← FAB fisso in basso a destra
+                    [+]         ← FAB fixed at bottom right
 ```
 
-**AddTransactionSheet** (bottom sheet che sale dal basso):
-- Selezione tipo: Spesa / Entrata / Trasferimento (tab in cima)
-- Tastierino numerico grande (stile calcolatrice) per importo
-- Selezione categoria con griglia di icone
-- Selezione conto (dropdown)
-- Campo note opzionale
-- Data (default oggi, modificabile)
-- Bottone "Salva" in fondo
-- Chiusura con swipe down o tap fuori
+**AddTransactionSheet** (bottom sheet that slides up from the bottom):
+- Type selection: Expense / Income / Transfer (tabs at the top)
+- Large numeric keypad (calculator-style) for the amount
+- Category selection with icon grid
+- Account selection (dropdown)
+- Optional notes field
+- Date (defaults to today, editable)
+- "Save" button at the bottom
+- Closes with swipe down or tap outside
 
-**Criteri di completamento**:
-- Cambiare mese aggiorna tutti i dati automaticamente
-- Il grafico mostra le categorie del mese selezionato
-- Toccare una fetta del grafico evidenzia la categoria nella lista
-- Il FAB apre il bottom sheet
-- Salvare una transazione aggiorna la dashboard (invalidate query)
-- Loading skeleton durante il fetch
-- Stato vuoto se non ci sono transazioni nel mese
+**Completion criteria**:
+- Changing the month automatically updates all data
+- The chart shows the categories for the selected month
+- Tapping a chart slice highlights the category in the list
+- The FAB opens the bottom sheet
+- Saving a transaction updates the dashboard (invalidate query)
+- Loading skeleton during fetch
+- Empty state if there are no transactions in the month
 
 ---
 
-## Milestone 5 — Frontend: lista transazioni
+## Milestone 5 — Frontend: transaction list
 
-**Obiettivo**: pagina movimenti con lista cronologica, filtri e swipe-to-delete.
+**Objective**: transactions page with chronological list, filters and swipe-to-delete.
 
-**File da creare**:
+**Files to create**:
 - `frontend/src/api/transactions.ts` — `getTransactions()`, `createTransaction()`, `deleteTransaction()`
 - `frontend/src/hooks/useTransactions.ts` — TanStack Query
-- `frontend/src/pages/Transactions.tsx` — pagina
-- `frontend/src/components/transactions/TransactionItem.tsx` — singola riga con swipe
-- `frontend/src/components/transactions/TransactionList.tsx` — lista raggruppata per giorno
+- `frontend/src/pages/Transactions.tsx` — page
+- `frontend/src/components/transactions/TransactionItem.tsx` — single row with swipe
+- `frontend/src/components/transactions/TransactionList.tsx` — list grouped by day
 
 **Layout**:
 ```
 ┌─────────────────────────────┐
-│  ← Giugno 2025 →            │
-│  [Tutte] [Spese] [Entrate]  │  ← filtro tipo
+│  ← June 2025 →              │
+│  [All] [Expenses] [Income]  │  ← type filter
 ├─────────────────────────────┤
-│  Oggi                       │
-│  🍕 Pranzo        -€12,50   │  ← swipe sx per eliminare
-│  🚗 Benzina       -€65,00   │
+│  Today                      │
+│  🍕 Lunch         -€12.50   │  ← swipe left to delete
+│  🚗 Fuel          -€65.00   │
 │                             │
-│  Ieri                       │
-│  💼 Stipendio  +€1.200,00   │
-│  🏠 Affitto      -€500,00   │
+│  Yesterday                  │
+│  💼 Salary     +€1,200.00   │
+│  🏠 Rent         -€500.00   │
 └─────────────────────────────┘
                     [+]
 ```
 
-**Criteri di completamento**:
-- Transazioni raggruppate per giorno in ordine cronologico inverso
-- Filtro Tutte/Spese/Entrate funzionante
-- Swipe left su una transazione mostra il bottone "Elimina" (rosso)
-- Conferma eliminazione con dialog
-- Eliminazione aggiorna saldo e invalida le query
-- Tap su una transazione mostra dettaglio (importo, categoria, conto, note, data)
-- Stato vuoto se nessuna transazione
+**Completion criteria**:
+- Transactions grouped by day in reverse chronological order
+- All/Expenses/Income filter works
+- Swiping left on a transaction shows the "Delete" button (red)
+- Deletion confirmed with a dialog
+- Deletion updates the balance and invalidates queries
+- Tapping a transaction shows details (amount, category, account, notes, date)
+- Empty state if there are no transactions
 
 ---
 
-## Milestone 6 — Frontend: conti e categorie
+## Milestone 6 — Frontend: accounts and categories
 
-**Obiettivo**: gestione conti (lista, crea, modifica saldo iniziale) e categorie (lista, crea, personalizza).
+**Objective**: account management (list, create, edit opening balance) and categories (list, create, customize).
 
-**File da creare**:
+**Files to create**:
 - `frontend/src/api/accounts.ts`
 - `frontend/src/api/categories.ts`
 - `frontend/src/pages/Accounts.tsx`
@@ -396,95 +396,95 @@ Step 2: card con campo codice TOTP 6 cifre
 - `frontend/src/components/accounts/AddAccountSheet.tsx`
 - `frontend/src/components/categories/CategoryGrid.tsx`
 - `frontend/src/components/categories/AddCategorySheet.tsx`
-- `frontend/src/components/ui/EmojiPicker.tsx` — picker semplice per icone emoji
-- `frontend/src/components/ui/ColorPicker.tsx` — palette colori predefiniti
+- `frontend/src/components/ui/EmojiPicker.tsx` — simple picker for emoji icons
+- `frontend/src/components/ui/ColorPicker.tsx` — predefined color palette
 
-**Pagina Conti**:
+**Accounts page**:
 ```
 ┌─────────────────────────────┐
-│  I miei conti               │
+│  My accounts                │
 ├─────────────────────────────┤
-│  💳 Conto corrente  €1.350  │
-│  💵 Contanti          €80   │
-│  📈 Investimenti    €5.200  │
+│  💳 Checking account €1,350 │
+│  💵 Cash               €80  │
+│  📈 Investments      €5,200 │
 ├─────────────────────────────┤
-│  + Aggiungi conto           │
+│  + Add account              │
 └─────────────────────────────┘
 ```
 
-**Pagina Categorie** — due sezioni (Spese / Entrate) con griglia di card:
+**Categories page** — two sections (Expenses / Income) with a card grid:
 ```
-  SPESE
-  [🍕 Cibo] [🚗 Auto] [🏠 Casa] ...
-  [+ Nuova]
+  EXPENSES
+  [🍕 Food] [🚗 Car] [🏠 Home] ...
+  [+ New]
 
-  ENTRATE
-  [💼 Stipendio] [💰 Extra] ...
-  [+ Nuova]
+  INCOME
+  [💼 Salary] [💰 Extra] ...
+  [+ New]
 ```
 
-**Criteri di completamento**:
-- Creazione conto con nome, emoji, colore, saldo iniziale
-- Modifica conto esistente
-- Saldo totale di tutti i conti mostrato in cima alla pagina Conti
-- Creazione categoria custom con nome, emoji, colore, tipo (spesa/entrata)
-- Le categorie default non sono eliminabili, solo disattivabili
-- EmojiPicker mostra almeno 30 emoji comuni raggruppate
-- ColorPicker mostra 12 colori predefiniti
+**Completion criteria**:
+- Account creation with name, emoji, color, opening balance
+- Editing an existing account
+- Total balance of all accounts shown at the top of the Accounts page
+- Custom category creation with name, emoji, color, type (expense/income)
+- Default categories cannot be deleted, only deactivated
+- EmojiPicker shows at least 30 common emoji grouped
+- ColorPicker shows 12 predefined colors
 
 ---
 
-## Milestone 7 — PWA, offline e ottimizzazioni mobile
+## Milestone 7 — PWA, offline and mobile optimizations
 
-**Obiettivo**: l'app si installa come PWA, funziona offline per la lettura, gestione notch iPhone.
+**Objective**: the app installs as a PWA, works offline for reading, handles the iPhone notch.
 
-**File da modificare / creare**:
-- `frontend/vite.config.ts` — ✅ PWA già configurata, verificare workbox config
-- `frontend/public/icon-192.png` e `icon-512.png` — generare icone app (emoji 💸 su sfondo indigo)
-- `frontend/src/hooks/useSwipe.ts` — hook per gesture swipe (per TransactionItem e navigazione mese)
-- `frontend/src/components/ui/BottomSheet.tsx` — componente riusabile bottom sheet con animazione
-- `frontend/src/components/ui/Skeleton.tsx` — loading skeleton riusabile
+**Files to modify / create**:
+- `frontend/vite.config.ts` — ✅ PWA already configured, verify workbox config
+- `frontend/public/icon-192.png` and `icon-512.png` — generate app icons (💸 emoji on indigo background)
+- `frontend/src/hooks/useSwipe.ts` — hook for swipe gestures (for TransactionItem and month navigation)
+- `frontend/src/components/ui/BottomSheet.tsx` — reusable bottom sheet component with animation
+- `frontend/src/components/ui/Skeleton.tsx` — reusable loading skeleton
 
-**Ottimizzazioni**:
-- Tutte le liste usano `Skeleton` durante il caricamento
-- Bottom sheet con animazione slide-up (CSS transition, no librerie)
-- Swipe orizzontale su TopBar per cambiare mese (useSwipe hook)
-- `viewport-fit=cover` nel meta tag (già presente in index.html)
-- `safe-area-inset-bottom` su bottom nav e bottom sheet
-- Prevent pull-to-refresh (`overscroll-behavior: none` sul body)
-- Immagini/icone in formato SVG o WebP
+**Optimizations**:
+- All lists use `Skeleton` during loading
+- Bottom sheet with slide-up animation (CSS transition, no libraries)
+- Horizontal swipe on TopBar to change month (useSwipe hook)
+- `viewport-fit=cover` in the meta tag (already present in index.html)
+- `safe-area-inset-bottom` on bottom nav and bottom sheet
+- Prevent pull-to-refresh (`overscroll-behavior: none` on body)
+- Images/icons in SVG or WebP format
 
-**Criteri di completamento**:
-- Chrome su Android mostra "Aggiungi alla schermata home"
-- Safari su iPhone: si installa, la status bar è corretta, nessun contenuto sotto il notch
-- In assenza di rete i dati dell'ultimo fetch sono visibili (Workbox NetworkFirst)
+**Completion criteria**:
+- Chrome on Android shows "Add to home screen"
+- Safari on iPhone: installs correctly, status bar is correct, no content under the notch
+- Without network connectivity, the data from the last fetch is visible (Workbox NetworkFirst)
 - Lighthouse PWA score ≥ 90
-- Il bottom sheet si apre/chiude con animazione fluida (no jank)
+- The bottom sheet opens/closes with a smooth animation (no jank)
 
 ---
 
-## Milestone 8 — Deploy produzione su VPS
+## Milestone 8 — Production deployment on VPS
 
-**Obiettivo**: `docker compose -f docker-compose.prod.yml up` porta l'app online, Cloudflare fa da reverse proxy.
+**Objective**: `docker compose -f docker-compose.prod.yml up` brings the app online, with Cloudflare as reverse proxy.
 
-**File da creare / verificare**:
-- `docker-compose.prod.yml` — ✅ già presente
-- `nginx/nginx.conf` — routing API vs frontend (già presente)
-- `frontend/Dockerfile` — build multi-stage (già presente)
-- `backend/Dockerfile` — prod (già presente)
-- `.env.prod.example` — variabili di produzione con commenti
+**Files to create / verify**:
+- `docker-compose.prod.yml` — ✅ already present
+- `nginx/nginx.conf` — API vs frontend routing (already present)
+- `frontend/Dockerfile` — multi-stage build (already present)
+- `backend/Dockerfile` — prod (already present)
+- `.env.prod.example` — production variables with comments
 
-**Checklist deploy**:
-1. `SECRET_KEY` generata con `openssl rand -hex 32`
-2. `POSTGRES_PASSWORD` forte (≥ 20 caratteri random)
-3. `CORS_ORIGINS` impostato al dominio Cloudflare reale
-4. Build frontend con `VITE_API_URL` vuoto (le API sono sullo stesso dominio tramite Nginx)
-5. Cloudflare DNS punta all'IP della VPS
-6. Cloudflare SSL mode: **Full** (non Full Strict, a meno di cert self-signed sulla VPS)
-7. Cloudflare regola Firewall: blocca tutto tranne porte 80/443
+**Deploy checklist**:
+1. `SECRET_KEY` generated with `openssl rand -hex 32`
+2. Strong `POSTGRES_PASSWORD` (≥ 20 random characters)
+3. `CORS_ORIGINS` set to the real Cloudflare domain
+4. Build frontend with empty `VITE_API_URL` (the API is on the same domain via Nginx)
+5. Cloudflare DNS points to the VPS IP
+6. Cloudflare SSL mode: **Full** (not Full Strict, unless using a self-signed cert on the VPS)
+7. Cloudflare Firewall rule: block everything except ports 80/443
 8. VPS: `ufw allow 80/tcp && ufw allow 443/tcp && ufw allow 22/tcp`
 
-**Script di backup** (`scripts/backup.sh`):
+**Backup script** (`scripts/backup.sh`):
 ```bash
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
@@ -492,446 +492,444 @@ docker compose exec db pg_dump -U $POSTGRES_USER $POSTGRES_DB | gzip > backups/d
 find backups/ -name "*.sql.gz" -mtime +30 -delete
 ```
 
-**Criteri di completamento**:
-- `docker compose -f docker-compose.prod.yml up -d --build` parte senza errori
-- L'app è raggiungibile via HTTPS sul dominio
-- `/api/docs` non è esposto pubblicamente (aggiungere `docs_url=None` in prod o proteggere con Cloudflare Access)
-- Il backup script funziona e produce un file `.sql.gz` valido
+**Completion criteria**:
+- `docker compose -f docker-compose.prod.yml up -d --build` starts without errors
+- The app is reachable via HTTPS on the domain
+- `/api/docs` is not publicly exposed (add `docs_url=None` in prod or protect it with Cloudflare Access)
+- The backup script works and produces a valid `.sql.gz` file
 
 ---
 
-## Milestone 9 (opzionale) — Features avanzate
+## Milestone 9 (optional) — Advanced features
 
-Da implementare dopo che l'app base è stabile.
+To be implemented after the base app is stable.
 
-### 9a — Budget mensile per categoria
-- Nuovo modello `Budget` (user_id, category_id, month, year, amount)
-- Endpoint `GET/POST /api/v1/budgets/`
-- Dashboard: barre di avanzamento budget per categoria (es. Cibo: €180/€300)
-- Alert visivo quando si supera l'80% del budget
+### 9a — Monthly budget per category
+- New `Budget` model (user_id, category_id, month, year, amount)
+- `GET/POST /api/v1/budgets/` endpoint
+- Dashboard: budget progress bars per category (e.g. Food: €180/€300)
+- Visual alert when exceeding 80% of the budget
 
-### 9b — Report e grafici trend
-- Endpoint `GET /api/v1/stats/trend?months=6` (già nella Milestone 2)
-- Nuova pagina o sezione "Report" con:
-  - Grafico a barre mensili entrate/uscite (Recharts BarChart)
-  - Grafico lineare saldo nel tempo
-  - Export CSV delle transazioni del mese
+### 9b — Reports and trend charts
+- `GET /api/v1/stats/trend?months=6` endpoint (already in Milestone 2)
+- New page or "Report" section with:
+  - Monthly income/expenses bar chart (Recharts BarChart)
+  - Line chart of balance over time
+  - CSV export of the month's transactions
 
-### 9c — Transazioni ricorrenti
+### 9c — Recurring transactions
 
-Implementata nella **Milestone 12 — Spese ricorrenti + Saldo reale** (vedi sotto), con
-frequenze settimanale/mensile/bimestrale/trimestrale, shift sui giorni festivi italiani e
-proiezione nella dashboard, in sostituzione di questa bozza iniziale.
+Implemented in **Milestone 12 — Recurring expenses + Real balance** (see below), with
+weekly/monthly/bimonthly/quarterly frequencies, shifting on Italian public holidays and
+projection in the dashboard, superseding this initial draft.
 
-### 9d — Multi-valuta
-- Ogni conto ha la propria `currency`
-- Endpoint che recupera tassi di cambio (es. da exchangerate-api.com, gratuito)
-- Conversione automatica in EUR per le statistiche aggregate
+### 9d — Multi-currency
+- Each account has its own `currency`
+- Endpoint that fetches exchange rates (e.g. from exchangerate-api.com, free)
+- Automatic conversion to EUR for aggregate statistics
 
 ---
 
-## Milestone 10 — Layout desktop con sidebar (stile Nextfolio) ✅
+## Milestone 10 — Desktop layout with sidebar (Nextfolio-style) ✅
 
-**Obiettivo**: quando l'app è apertaa da browser desktop (≥768px, breakpoint `md`), mostrare un layout diverso da quello mobile: sidebar laterale fissa con tutte le sezioni, topbar con menu utente, e una pagina Impostazioni dedicata. Su mobile il layout attuale (bottom nav, max-w-2xl) resta invariato. Pattern di riferimento: `nextfolio/frontend/src/components/layout/` (`Sidebar.tsx`, `MainLayout.tsx`, `TopBar.tsx`).
+**Objective**: when the app is opened from a desktop browser (≥768px, `md` breakpoint), show a layout different from the mobile one: fixed side sidebar with all sections, topbar with user menu, and a dedicated Settings page. On mobile the current layout (bottom nav, max-w-2xl) remains unchanged. Reference pattern: `nextfolio/frontend/src/components/layout/` (`Sidebar.tsx`, `MainLayout.tsx`, `TopBar.tsx`).
 
-**File da creare**:
-- `frontend/src/components/layout/Sidebar.tsx` — sidebar laterale, visibile solo `md:flex` (nascosta su mobile)
-- `frontend/src/pages/Settings.tsx` — pagina Impostazioni (profilo, sicurezza/MFA, preferenze, logout)
-- `frontend/src/pages/About.tsx` — pagina info app (versione, link, ecc.) — opzionale, come in Nextfolio
+**Files to create**:
+- `frontend/src/components/layout/Sidebar.tsx` — side sidebar, visible only `md:flex` (hidden on mobile)
+- `frontend/src/pages/Settings.tsx` — Settings page (profile, security/MFA, preferences, logout)
+- `frontend/src/pages/About.tsx` — app info page (version, links, etc.) — optional, as in Nextfolio
 
-**File da modificare**:
+**Files to modify**:
 - `frontend/src/components/layout/Layout.tsx`:
-  - Su mobile (`< md`): comportamento attuale, bottom nav + `max-w-2xl mx-auto`
-  - Su desktop (`≥ md`): `<Sidebar />` a sinistra + area contenuto a destra (no `max-w-2xl`, niente bottom nav), `BottomNav` con `md:hidden`
-- `frontend/src/components/layout/BottomNav.tsx` — aggiungere `md:hidden`, aggiungere voce "Impostazioni" (icona `Settings`)
-- `frontend/src/components/layout/TopBar.tsx` — su desktop aggiungere menu utente in alto a destra (avatar, link a Impostazioni, logout), mantenendo la navigazione mese (← Giugno 2025 →) centrale
-- `frontend/src/App.tsx` — aggiungere route `/settings` (e `/about` se creata)
+  - On mobile (`< md`): current behavior, bottom nav + `max-w-2xl mx-auto`
+  - On desktop (`≥ md`): `<Sidebar />` on the left + content area on the right (no `max-w-2xl`, no bottom nav), `BottomNav` with `md:hidden`
+- `frontend/src/components/layout/BottomNav.tsx` — add `md:hidden`, add "Settings" item (`Settings` icon)
+- `frontend/src/components/layout/TopBar.tsx` — on desktop add a user menu at the top right (avatar, link to Settings, logout), keeping the month navigation (← June 2025 →) centered
+- `frontend/src/App.tsx` — add `/settings` route (and `/about` if created)
 
-**Sidebar — voci di navigazione**:
+**Sidebar — navigation items**:
 ```
 📊 Home          → /
-↔️  Movimenti     → /transactions
-💼 Conti          → /accounts
-🏷️  Categorie     → /categories
-⚙️  Impostazioni  → /settings
+↔️  Transactions  → /transactions
+💼 Accounts      → /accounts
+🏷️  Categories   → /categories
+⚙️  Settings     → /settings
 ```
 
-**Pagina Impostazioni — sezioni**:
-- **Profilo**: email utente, nome (se presente)
-- **Sicurezza**: stato MFA + setup/disable (riusa il flusso già descritto in Milestone 1.5/3, oggi non ancora collegato a una pagina)
-- **Preferenze**: tema (se in futuro si aggiunge light mode), valuta predefinita
-- **Account**: bottone "Esci" (logout)
+**Settings page — sections**:
+- **Profile**: user email, name (if present)
+- **Security**: MFA status + setup/disable (reuses the flow already described in Milestone 1.5/3, not yet connected to a page)
+- **Preferences**: theme (if light mode is added in the future), default currency
+- **Account**: "Log out" button
 
-**Layout responsive — schema**:
+**Responsive layout — diagram**:
 ```
 Mobile (< md)                    Desktop (≥ md)
 ┌───────────────────┐            ┌────────┬──────────────────────────┐
-│  ← Giugno 2025 →  │            │        │  ← Giugno 2025 →    👤 ▾ │
+│  ← June 2025 →    │            │        │  ← June 2025 →      👤 ▾ │
 ├───────────────────┤            │        ├──────────────────────────┤
 │                   │            │ Sidebar│                          │
-│     Pagina        │            │  📊    │        Pagina            │
+│      Page         │            │  📊    │        Page              │
 │                   │            │  ↔️    │                          │
 │                   │            │  💼    │                          │
 ├───────────────────┤            │  🏷️    │                          │
 │ 📊 ↔️ 💼 🏷️ ⚙️ │            │  ⚙️    │                          │
 └───────────────────┘            └────────┴──────────────────────────┘
-   bottom nav                       sidebar fissa, no bottom nav
+   bottom nav                       fixed sidebar, no bottom nav
 ```
 
-**Criteri di completamento**:
-- A larghezza < 768px il layout è identico a quello attuale (nessuna regressione)
-- A larghezza ≥ 768px appare la sidebar laterale con tutte le sezioni, la bottom nav è nascosta
-- La pagina Impostazioni è raggiungibile sia da sidebar (desktop) che da bottom nav (mobile)
-- Il contenuto centrale non è più limitato a `max-w-2xl` su desktop, usa lo spazio disponibile
-- Cambiare sezione dalla sidebar aggiorna la pagina senza reload (routing client-side)
-- Stile coerente con il tema scuro esistente (`#0f0f13`, `#1a1a24`, accent indigo `#6366f1`)
+**Completion criteria**:
+- At widths < 768px the layout is identical to the current one (no regression)
+- At widths ≥ 768px the side sidebar appears with all sections, the bottom nav is hidden
+- The Settings page is reachable both from the sidebar (desktop) and from the bottom nav (mobile)
+- The central content is no longer limited to `max-w-2xl` on desktop, it uses the available space
+- Switching sections from the sidebar updates the page without a reload (client-side routing)
+- Styling consistent with the existing dark theme (`#0f0f13`, `#1a1a24`, indigo accent `#6366f1`)
 
 ---
 
-## Milestone 11 — Riorganizzazione categorie ✅
+## Milestone 11 — Category reorganization ✅
 
-**Obiettivo**: le categorie importate da Firefly III (Milestone "migrazione dati") erano
-troppo granulari — 55 categorie (46 spese + 9 entrate) con doppioni concettuali (es.
-"Farmaci", "Spese Sanitarie", "Visite mediche", "Ausili medici" tutte riconducibili a
-"Salute"). Sono state accorpate in **21 categorie** (16 spese + 5 entrate), riassegnando le
-1.335 transazioni esistenti senza perdita di dati.
+**Objective**: the categories imported from Firefly III (data migration milestone) were
+too granular — 55 categories (46 expenses + 9 income) with conceptual duplicates (e.g.
+"Medicines", "Healthcare expenses", "Medical visits", "Medical aids" all traceable back to
+"Health"). They were merged into **21 categories** (16 expenses + 5 income), reassigning the
+1,335 existing transactions with no data loss.
 
-**Script**: `scripts/consolidate_categories.py` (one-off, stesso pattern di
-`migrate_from_firefly.py`) — per ogni gruppo rinomina/ricolora la categoria con più
-transazioni, riassegna le transazioni delle categorie accorpate e le elimina, tutto in
-un'unica transazione SQL.
+**Script**: `scripts/consolidate_categories.py` (one-off, same pattern as
+`migrate_from_firefly.py`) — for each group it renames/recolors the category with the most
+transactions, reassigns the transactions from the merged categories and deletes them, all in
+a single SQL transaction.
 
-**Nuovo elenco categorie**:
+**New category list**:
 
-| Spese | Entrate |
+| Expenses | Income |
 |---|---|
-| 🛒 Spesa & Alimentari | 💼 Stipendio |
-| 🍕 Ristoranti & Bar | 💸 Rimborsi |
-| 🚗 Trasporti | 📈 Investimenti |
-| 🏠 Casa | 🎁 Regali ricevuti |
-| 💡 Bollette & Utenze | 💰 Altre entrate |
-| ✈️ Viaggi & Vacanze | |
+| 🛒 Groceries | 💼 Salary |
+| 🍕 Restaurants & Bars | 💸 Reimbursements |
+| 🚗 Transport | 📈 Investments |
+| 🏠 Home | 🎁 Gifts received |
+| 💡 Bills & Utilities | 💰 Other income |
+| ✈️ Travel & Vacations | |
 | 🛍️ Shopping | |
-| 📖 Istruzione | |
-| 📱 Abbonamenti | |
-| 🛡️ Assicurazioni | |
-| 🏥 Salute | |
-| 🎭 Intrattenimento & Tempo libero | |
-| 🐾 Animali | |
-| 💰 Risparmi & Investimenti | |
-| 🔄 Trasferimento | |
-| 📦 Varie | |
+| 📖 Education | |
+| 📱 Subscriptions | |
+| 🛡️ Insurance | |
+| 🏥 Health | |
+| 🎭 Entertainment & Leisure | |
+| 🐾 Pets | |
+| 💰 Savings & Investments | |
+| 🔄 Transfer | |
+| 📦 Miscellaneous | |
 
-`DEFAULT_CATEGORIES` in `backend/app/api/v1/endpoints/categories.py` aggiornato allo stesso
-elenco, così eventuali nuovi utenti partono con il set consolidato.
+`DEFAULT_CATEGORIES` in `backend/app/api/v1/endpoints/categories.py` updated to the same
+list, so any new users start with the consolidated set.
 
-**Criteri di completamento**:
+**Completion criteria**:
 - `SELECT COUNT(*) FROM categories` → 21
-- Totale transazioni invariato (1.335), nessuna orfana
-- Pagina Categorie e Dashboard mostrano le nuove categorie con icone/colori corretti
+- Total transactions unchanged (1,335), none orphaned
+- Categories page and Dashboard show the new categories with correct icons/colors
 
 ---
 
-## Milestone 12 — Spese ricorrenti + Saldo reale ✅
+## Milestone 12 — Recurring expenses + Real balance ✅
 
-**Obiettivo**: gestire spese/entrate ricorrenti (abbonamenti, rate, affitto) con frequenza
-settimanale/mensile/bimestrale/trimestrale, fine prevista o ricorrenza indefinita, e
-calcolo automatico dello shift sui giorni festivi italiani. In dashboard, una nuova
-metrica "Saldo reale" mostra quanto resterà davvero a fine mese tenendo conto delle
-ricorrenze non ancora addebitate.
+**Objective**: manage recurring expenses/income (subscriptions, installments, rent) with
+weekly/monthly/bimonthly/quarterly frequency, planned end or indefinite recurrence, and
+automatic calculation of the shift on Italian public holidays. On the dashboard, a new
+"Real balance" metric shows how much will actually remain at the end of the month, taking
+into account recurrences not yet charged.
 
 ### Backend
-- `app/services/holidays.py` — calcolo festività italiane (fisse + Lunedì dell'Angelo via
-  algoritmo di Gauss) e `next_business_day()` (salta weekend e festivi)
-- Modello `RecurringTransaction` (`recurring_transactions`, migration `003_recurring`):
-  importo, tipo, categoria/conto, frequenza (`weekly`/`monthly`/`bimonthly`/`quarterly`),
-  `start_date` (data di addebito di riferimento), `end_date` opzionale (NULL = senza
-  scadenza), `last_run_date`
+- `app/services/holidays.py` — calculation of Italian holidays (fixed + Easter Monday via
+  Gauss's algorithm) and `next_business_day()` (skips weekends and holidays)
+- `RecurringTransaction` model (`recurring_transactions`, migration `003_recurring`):
+  amount, type, category/account, frequency (`weekly`/`monthly`/`bimonthly`/`quarterly`),
+  `start_date` (reference charge date), optional `end_date` (NULL = no expiration),
+  `last_run_date`
 - `app/services/recurring.py`:
-  - `next_raw_date()` calcola la prossima occorrenza grezza dalla frequenza
-  - `process_due_recurring()` — job giornaliero: genera le `Transaction` per le occorrenze
-    (shiftate al primo giorno lavorativo) ormai scadute, aggiorna `Account.balance` e
-    `last_run_date`
-  - `projected_occurrences()` — occorrenze previste nel mese corrente non ancora generate,
-    usate per `/stats/monthly`
-- `APScheduler` (`AsyncIOScheduler`) avviato nel `lifespan` di `app/main.py`, cron
-  giornaliero alle 00:10
-- `GET/POST/PATCH/DELETE /api/v1/recurring/` — CRUD ricorrenze dell'utente
-- `/api/v1/stats/monthly` esteso:
-  - `real_balance` = patrimonio totale (somma saldi conti attivi) − spese ricorrenti
-    previste non ancora generate per il resto del mese + entrate ricorrenti previste
-  - le occorrenze ricorrenti previste del mese vengono aggiunte anche a `income`/`expenses`
-    e a `by_category`, così appaiono già nel grafico a torta
+  - `next_raw_date()` computes the next raw occurrence from the frequency
+  - `process_due_recurring()` — daily job: generates the `Transaction` records for
+    occurrences (shifted to the first business day) that are now due, updates
+    `Account.balance` and `last_run_date`
+  - `projected_occurrences()` — occurrences expected in the current month not yet
+    generated, used by `/stats/monthly`
+- `APScheduler` (`AsyncIOScheduler`) started in the `lifespan` of `app/main.py`, daily cron
+  at 00:10
+- `GET/POST/PATCH/DELETE /api/v1/recurring/` — CRUD for the user's recurrences
+- `/api/v1/stats/monthly` extended:
+  - `real_balance` = total net worth (sum of active account balances) − projected recurring
+    expenses not yet generated for the rest of the month + projected recurring income
+  - the projected recurring occurrences for the month are also added to `income`/`expenses`
+    and to `by_category`, so they already appear in the pie chart
 
 ### Frontend
-- `frontend/src/api/recurring.ts` — tipi e chiamate CRUD
+- `frontend/src/api/recurring.ts` — CRUD types and calls
 - `frontend/src/pages/Recurring.tsx` + `components/recurring/RecurringCard.tsx` +
-  `components/recurring/AddRecurringSheet.tsx` — nuova pagina "Ricorrenti" (lista,
-  creazione/modifica/eliminazione, selezione frequenza e data di fine opzionale)
-- Voce "Ricorrenti" in `Sidebar.tsx` e `BottomNav.tsx`
-- `SummaryBar.tsx` — quarta card "Saldo reale" (griglia 2×2 su mobile, 4 colonne da `sm`)
-- `Dashboard.tsx` passa `summary.real_balance` a `SummaryBar`
+  `components/recurring/AddRecurringSheet.tsx` — new "Recurring" page (list,
+  create/edit/delete, frequency selection and optional end date)
+- "Recurring" item in `Sidebar.tsx` and `BottomNav.tsx`
+- `SummaryBar.tsx` — fourth card "Real balance" (2×2 grid on mobile, 4 columns from `sm`)
+- `Dashboard.tsx` passes `summary.real_balance` to `SummaryBar`
 
-**Criteri di completamento**:
-- `alembic upgrade head` crea `recurring_transactions` senza errori
-- Creando una ricorrenza mensile, `GET /api/v1/stats/monthly` per il mese corrente
-  restituisce `real_balance` e, se ci sono occorrenze previste, le somma a `by_category`
-- Una ricorrenza con `start_date` su un giorno festivo/weekend viene addebitata (job o
-  esecuzione manuale di `process_due_recurring`) con `date` spostata al primo giorno
-  lavorativo successivo
-- Dashboard mostra la card "Saldo reale" e il grafico a torta include le ricorrenti
-  previste del mese
+**Completion criteria**:
+- `alembic upgrade head` creates `recurring_transactions` without errors
+- Creating a monthly recurrence, `GET /api/v1/stats/monthly` for the current month
+  returns `real_balance` and, if there are projected occurrences, adds them to `by_category`
+- A recurrence with `start_date` on a holiday/weekend gets charged (job or manual
+  execution of `process_due_recurring`) with `date` moved to the next business day
+- Dashboard shows the "Real balance" card and the pie chart includes the projected
+  recurrences for the month
 
 ---
 
-## Milestone 13 — Preferenze utente (valuta, conto predefinito) + fix UI mobile ✅
+## Milestone 13 — User preferences (currency, default account) + mobile UI fixes ✅
 
-**Obiettivo**: permettere all'utente di scegliere la valuta visualizzata nell'app e un
-conto predefinito da mostrare all'apertura della Dashboard, e risolvere due problemi di
-usabilità su smartphone nei bottom sheet.
+**Objective**: allow the user to choose the currency displayed in the app and a
+default account to show when opening the Dashboard, and fix two usability issues on
+smartphones in the bottom sheets.
 
 ### Backend
-- Modello `User` (`app/models/user.py`): nuovi campi `currency` (default `EUR`) e
-  `default_account_id` (FK opzionale verso `accounts.id`, `ON DELETE SET NULL`)
-- Migration `004_user_prefs` — `ALTER TABLE users ADD COLUMN currency ...` e
+- `User` model (`app/models/user.py`): new fields `currency` (default `EUR`) and
+  `default_account_id` (optional FK to `accounts.id`, `ON DELETE SET NULL`)
+- Migration `004_user_prefs` — `ALTER TABLE users ADD COLUMN currency ...` and
   `default_account_id ...`
-- `relationship` su `User`/`Account` resi espliciti con `foreign_keys` per evitare
-  l'ambiguità introdotta dal nuovo FK `users.default_account_id → accounts.id`
+- `relationship` on `User`/`Account` made explicit with `foreign_keys` to avoid
+  the ambiguity introduced by the new FK `users.default_account_id → accounts.id`
 - `app/api/v1/endpoints/auth.py`:
-  - `UserOut` include ora `currency` e `default_account_id`
-  - nuovo `PATCH /api/v1/auth/me` — aggiorna `currency` e/o `default_account_id`
-    (valida che il conto appartenga all'utente; `clear_default_account: true` per
-    tornare a "Tutti i conti")
+  - `UserOut` now includes `currency` and `default_account_id`
+  - new `PATCH /api/v1/auth/me` — updates `currency` and/or `default_account_id`
+    (validates that the account belongs to the user; `clear_default_account: true` to
+    return to "All accounts")
 
 ### Frontend
-- `utils/currency.ts` — elenco valute supportate (EUR, USD, GBP, CHF, JPY) con simbolo
-- `hooks/useCurrency.ts` — legge `user.currency` da `authStore` e restituisce il simbolo
-- Tutti i punti dell'app che mostravano `€` fisso (Dashboard, Conti, Movimenti,
-  Ricorrenti e relativi bottom sheet) usano ora `useCurrency()`; `AccountCard` mostra il
-  simbolo della valuta del singolo conto (`account.currency`)
-- Nuove transazioni/conti creati usano la valuta preferita dell'utente
-- `pages/Settings.tsx` — nuova sezione **Preferenze**:
-  - select Valuta → `PATCH /auth/me { currency }`
-  - select "Conto predefinito (schermata iniziale)" → `PATCH /auth/me { default_account_id }`
-    (opzione "Tutti i conti" → `clear_default_account: true`)
-- `pages/Dashboard.tsx` — al primo caricamento, se l'utente ha un conto predefinito
-  impostato, lo seleziona automaticamente nel filtro conti
+- `utils/currency.ts` — list of supported currencies (EUR, USD, GBP, CHF, JPY) with symbol
+- `hooks/useCurrency.ts` — reads `user.currency` from `authStore` and returns the symbol
+- All places in the app that showed a fixed `€` (Dashboard, Accounts, Transactions,
+  Recurring and related bottom sheets) now use `useCurrency()`; `AccountCard` shows the
+  currency symbol for the individual account (`account.currency`)
+- New transactions/accounts created use the user's preferred currency
+- `pages/Settings.tsx` — new **Preferences** section:
+  - Currency select → `PATCH /auth/me { currency }`
+  - "Default account (home screen)" select → `PATCH /auth/me { default_account_id }`
+    ("All accounts" option → `clear_default_account: true`)
+- `pages/Dashboard.tsx` — on first load, if the user has a default account
+  set, it is automatically selected in the account filter
 
-### Fix UI mobile (bottom sheet)
-- `components/ui/AddTransactionButton.tsx` — FAB `+` alzato (`bottom-20` → `bottom-28`)
-  per non sovrapporsi alla bottom nav
-- `components/ui/BottomSheet.tsx` — backdrop e pannello portati a `z-[55]`/`z-[60]`
-  (sopra la `BottomNav`, che è `z-50`): risolve il problema per cui il bottone "Salva"
-  in fondo ai bottom sheet (nuova transazione, ricorrenza, ecc.) era coperto dalla
-  bottom nav e non era cliccabile su smartphone
+### Mobile UI fix (bottom sheet)
+- `components/ui/AddTransactionButton.tsx` — `+` FAB raised (`bottom-20` → `bottom-28`)
+  to avoid overlapping the bottom nav
+- `components/ui/BottomSheet.tsx` — backdrop and panel brought to `z-[55]`/`z-[60]`
+  (above `BottomNav`, which is `z-50`): fixes the issue where the "Save"
+  button at the bottom of the bottom sheets (new transaction, recurrence, etc.) was
+  covered by the bottom nav and not clickable on smartphones
 
-**Criteri di completamento**:
-- `alembic upgrade head` applica `004_user_prefs` senza errori, backend si avvia senza
-  errori di mapping SQLAlchemy
-- Cambiando la valuta in Impostazioni, tutti gli importi nell'app mostrano il nuovo
-  simbolo
-- Impostando un conto predefinito, la Dashboard lo seleziona automaticamente al
-  successivo accesso
-- Su smartphone il FAB `+` e il bottone "Salva" dei bottom sheet sono sempre
-  raggiungibili, senza essere coperti dalla bottom nav
+**Completion criteria**:
+- `alembic upgrade head` applies `004_user_prefs` without errors, backend starts without
+  SQLAlchemy mapping errors
+- Changing the currency in Settings, all amounts in the app show the new
+  symbol
+- Setting a default account, the Dashboard automatically selects it on the
+  next visit
+- On smartphones the `+` FAB and the "Save" button of the bottom sheets are always
+  reachable, without being covered by the bottom nav
 
 ---
 
-## Milestone 14 — Import CSV Mediobanca Premier + riconciliazione conto ✅
+## Milestone 14 — Mediobanca Premier CSV import + account reconciliation ✅
 
-**Obiettivo**: permettere l'import in blocco dei movimenti da un estratto conto CSV di
-Mediobanca Premier (con categorizzazione automatica e deduplica) e una funzione di
-riconciliazione del saldo (ispirata a Firefly III) per allineare il saldo del conto al
-saldo reale della banca.
+**Objective**: allow bulk import of transactions from a Mediobanca Premier bank statement
+CSV (with automatic categorization and deduplication) and a balance reconciliation
+feature (inspired by Firefly III) to align the account balance with the actual bank balance.
 
 ### Backend
-- Modello `Transaction` (`app/models/transaction.py`): nuovi campi `import_hash`
-  (`String(64)`, nullable) e `is_reconciliation` (`Boolean`, default `false`)
-- Migration `005_csv_import_reconciliation` — aggiunge le due colonne e crea l'indice
-  univoco parziale `ix_tx_account_import_hash ON transactions(account_id, import_hash)
-  WHERE import_hash IS NOT NULL` per evitare doppioni
+- `Transaction` model (`app/models/transaction.py`): new fields `import_hash`
+  (`String(64)`, nullable) and `is_reconciliation` (`Boolean`, default `false`)
+- Migration `005_csv_import_reconciliation` — adds the two columns and creates the
+  partial unique index `ix_tx_account_import_hash ON transactions(account_id, import_hash)
+  WHERE import_hash IS NOT NULL` to prevent duplicates
 - `app/services/csv_import.py`:
-  - `decode_csv_bytes` — decodifica robusta (utf-8-sig → cp1252 → latin-1)
-  - `parse_italian_amount` / `parse_italian_date` — formati numerici/date italiani
-  - `CATEGORY_KEYWORDS` + `suggest_category_name` — suggerimento categoria basato su
-    parole chiave nella descrizione del movimento (farmacia, supermercati, ristoranti,
-    Amazon, utenze, stipendio, prelievi, ecc.)
+  - `decode_csv_bytes` — robust decoding (utf-8-sig → cp1252 → latin-1)
+  - `parse_italian_amount` / `parse_italian_date` — Italian numeric/date formats
+  - `CATEGORY_KEYWORDS` + `suggest_category_name` — category suggestion based on
+    keywords in the transaction description (pharmacy, supermarkets, restaurants,
+    Amazon, utilities, salary, withdrawals, etc.)
 
-  - `compute_import_hash` — hash SHA256 di `(account_id, data, importo, descrizione)`
-    usato per la deduplica
-  - `parse_mediobanca_csv` — parsing del CSV (delimitatore `;`, colonne `Data
-    contabile`/`Data valuta`, `Entrate`/`Uscite`, `Tipologia`, `Divisa`), con elenco di
-    warning per righe malformate o scartate
+  - `compute_import_hash` — SHA256 hash of `(account_id, date, amount, description)`
+    used for deduplication
+  - `parse_mediobanca_csv` — CSV parsing (`;` delimiter, columns `Data
+    contabile`/`Data valuta`, `Entrate`/`Uscite`, `Tipologia`, `Divisa`), with a list of
+    warnings for malformed or discarded rows
 - `app/api/v1/endpoints/csv_import.py` (router `/api/v1/import`):
-  - `POST /import/mediobanca/preview` — form-data (`account_id`, `file`), nessuna
-    scrittura su DB: ritorna l'elenco delle righe con categoria suggerita, flag
-    `is_duplicate` (basato su `import_hash` già presenti per il conto) e
-    `currency_mismatch` (valuta riga ≠ valuta conto)
-  - `POST /import/mediobanca/confirm` — crea le `Transaction` per le righe incluse
-    (ri-controllando i duplicati lato server), aggiorna `account.balance` con la stessa
-    logica `Decimal` usata per le transazioni manuali, un solo commit finale
+  - `POST /import/mediobanca/preview` — form-data (`account_id`, `file`), no
+    writes to DB: returns the list of rows with suggested category, `is_duplicate`
+    flag (based on `import_hash` already present for the account) and
+    `currency_mismatch` (row currency ≠ account currency)
+  - `POST /import/mediobanca/confirm` — creates the `Transaction` records for the included
+    rows (re-checking duplicates server-side), updates `account.balance` with the same
+    `Decimal` logic used for manual transactions, a single final commit
 - `app/api/v1/endpoints/accounts.py`:
-  - nuovo `POST /accounts/{id}/reconcile` — riceve `real_balance` (e opzionalmente
-    `date`), calcola la differenza col saldo Moneto e, se diversa da zero, crea una
-    `Transaction` di rettifica (`is_reconciliation=true`, nota "Rettifica saldo
-    (riconciliazione)") e aggiorna `account.balance` al valore reale. Le transazioni di
-    rettifica contano come transazioni normali nelle statistiche mensili.
+  - new `POST /accounts/{id}/reconcile` — receives `real_balance` (and optionally
+    `date`), computes the difference from the Moneto balance and, if different from zero,
+    creates an adjustment `Transaction` (`is_reconciliation=true`, note "Balance
+    adjustment (reconciliation)") and updates `account.balance` to the real value. Adjustment
+    transactions count as normal transactions in the monthly statistics.
 
 ### Frontend
 - `api/csvImport.ts` — `importApi.previewMediobanca` / `confirmMediobanca`
 - `api/accounts.ts` — `accountsApi.reconcile(id, { real_balance, date })`
-- `components/accounts/ImportCsvSheet.tsx` — bottom sheet a due fasi: selezione file CSV
-  → anteprima righe (categoria modificabile, checkbox di inclusione, badge "Duplicato" /
-  "Valuta diversa") → conferma import con riepilogo
-- `components/accounts/ReconcileSheet.tsx` — bottom sheet con saldo attuale, input saldo
-  reale e data, differenza calcolata live, conferma che crea la rettifica
-- `components/accounts/AddAccountSheet.tsx` — in modalità modifica, due nuovi bottoni
-  "📄 Importa estratto conto" e "⚖️ Riconcilia saldo"
-- `pages/Accounts.tsx` — stato per aprire `ImportCsvSheet` / `ReconcileSheet` dal conto
-  selezionato
+- `components/accounts/ImportCsvSheet.tsx` — two-phase bottom sheet: CSV file selection
+  → row preview (editable category, inclusion checkbox, "Duplicate" /
+  "Different currency" badge) → import confirmation with summary
+- `components/accounts/ReconcileSheet.tsx` — bottom sheet with current balance, real
+  balance and date input, live-calculated difference, confirmation that creates the adjustment
+- `components/accounts/AddAccountSheet.tsx` — in edit mode, two new buttons
+  "📄 Import bank statement" and "⚖️ Reconcile balance"
+- `pages/Accounts.tsx` — state to open `ImportCsvSheet` / `ReconcileSheet` from the
+  selected account
 
-**Criteri di completamento**:
-- `alembic upgrade head` applica `005_csv_import_reconciliation` senza errori, backend
-  si avvia senza errori di mapping
-- Caricando l'estratto conto Mediobanca di esempio si vede l'anteprima con date, importi
-  e categorie suggerite corrette
-- Confermando l'import, il saldo del conto si aggiorna e le transazioni compaiono nei
-  Movimenti con la descrizione originale come nota
-- Ricaricando lo stesso file, le righe già importate sono marcate come duplicate e non
-  vengono reimportate
-- La riconciliazione crea una transazione di rettifica con segno corretto e porta il
-  saldo del conto al valore inserito
+**Completion criteria**:
+- `alembic upgrade head` applies `005_csv_import_reconciliation` without errors, backend
+  starts without mapping errors
+- Uploading the sample Mediobanca bank statement shows the preview with correct dates,
+  amounts and suggested categories
+- Confirming the import, the account balance updates and the transactions appear in
+  Transactions with the original description as note
+- Reloading the same file, the already-imported rows are marked as duplicates and are not
+  reimported
+- Reconciliation creates an adjustment transaction with the correct sign and brings the
+  account balance to the entered value
 
 ---
 
-## Milestone 9b — Report e grafici trend ✅
+## Milestone 9b — Reports and trend charts ✅
 
-**Obiettivo**: nuova pagina "Report" con l'andamento mensile di entrate/uscite, il saldo
-nel tempo e l'export CSV dei movimenti del mese.
+**Objective**: new "Report" page with the monthly trend of income/expenses, the balance
+over time and CSV export of the month's transactions.
 
 ### Backend
-- Nessuna modifica: riusa `GET /api/v1/stats/trend?months=N` (già presente dalla
-  Milestone 2) e `GET /api/v1/transactions/` per l'export.
+- No changes: reuses `GET /api/v1/stats/trend?months=N` (already present since
+  Milestone 2) and `GET /api/v1/transactions/` for the export.
 
 ### Frontend
-- `components/report/TrendChart.tsx` — grafico a barre (Recharts) entrate/uscite per
-  mese, con selettore di intervallo 3/6/12 mesi
-- `components/report/BalanceTrendChart.tsx` — grafico a linee del saldo totale a fine
-  mese, calcolato a ritroso a partire dal saldo attuale dei conti sottraendo il netto
-  (entrate − uscite) di ciascun mese successivo
-- `utils/exportCsv.ts` — genera e scarica un CSV (con BOM UTF-8, delimitatore `;`)
-- `pages/Report.tsx` — pagina con i due grafici e un bottone "Esporta movimenti" che
-  scarica il CSV del mese selezionato (data, descrizione, categoria, conto, tipo,
-  importo)
-- Nuova voce "Report" in `BottomNav` e `Sidebar`, nuova rotta `/report`
+- `components/report/TrendChart.tsx` — bar chart (Recharts) of income/expenses per
+  month, with a 3/6/12-month range selector
+- `components/report/BalanceTrendChart.tsx` — line chart of total balance at end of
+  month, calculated backwards starting from the current account balance by subtracting the
+  net (income − expenses) of each subsequent month
+- `utils/exportCsv.ts` — generates and downloads a CSV (with UTF-8 BOM, `;` delimiter)
+- `pages/Report.tsx` — page with the two charts and an "Export transactions" button that
+  downloads the CSV for the selected month (date, description, category, account, type,
+  amount)
+- New "Report" item in `BottomNav` and `Sidebar`, new `/report` route
 
-**Criteri di completamento**:
-- La pagina Report mostra il grafico a barre entrate/uscite e il grafico a linee del
-  saldo per l'intervallo selezionato (3/6/12 mesi)
-- Il bottone "Esporta movimenti" scarica un CSV con i movimenti del mese corrente,
-  apribile correttamente in Excel/LibreOffice (accenti italiani inclusi)
+**Completion criteria**:
+- The Report page shows the income/expenses bar chart and the balance line chart
+  for the selected range (3/6/12 months)
+- The "Export transactions" button downloads a CSV with the current month's transactions,
+  correctly openable in Excel/LibreOffice (including Italian accented characters)
 
 ---
 
-## Milestone 15 — Saldo reale per conto, dashboard per periodo, modifica/eliminazione movimenti ✅
+## Milestone 15 — Per-account real balance, dashboard by period, transaction edit/delete ✅
 
-**Obiettivo**: il saldo di un conto non è più un contatore aggiornato a ogni
-transazione, ma viene calcolato al volo dalle transazioni reali (`date <= now`),
-permettendo transazioni con data futura ("non ancora contabilizzate"). La Dashboard
-mostra le metriche del periodo selezionabile (mese corrente, settimana corrente o
-intervallo personalizzato) e i suoi indicatori sono collegati al saldo reale dei conti.
-Aggiunta anche la modifica/eliminazione delle transazioni esistenti.
+**Objective**: an account's balance is no longer a counter updated on every
+transaction, but is calculated on the fly from actual transactions (`date <= now`),
+allowing transactions with a future date ("not yet posted"). The Dashboard
+shows the metrics for a selectable period (current month, current week or
+custom range) and its indicators are tied to the real balance of the accounts.
+Also added editing/deleting of existing transactions.
 
-> **Supera/aggiorna** quanto descritto nella Milestone 12 (`real_balance` su
-> `/stats/monthly`) e nella Milestone 14 (riconciliazione che aggiornava
-> `account.balance` direttamente): entrambi gli endpoint sono stati sostituiti come
-> descritto sotto.
+> **Supersedes/updates** what was described in Milestone 12 (`real_balance` on
+> `/stats/monthly`) and in Milestone 14 (reconciliation that updated
+> `account.balance` directly): both endpoints have been replaced as
+> described below.
 
 ### Backend
-- Migration `006_real_balance_model` — rinomina `accounts.balance` →
-  `accounts.opening_balance` e "scarica" su questa colonna il netto di tutte le
-  transazioni esistenti, in modo che il saldo reale calcolato resti invariato dopo la
-  migrazione
-- `app/services/balance.py` — `compute_balances()` / `compute_balance()`: saldo reale di
-  un conto = `opening_balance + Σ(entrate − uscite)` delle transazioni con
-  `date <= as_of` (default: ora)
-- Rimosse tutte le mutazioni dirette di `account.balance` da
-  `transactions.py` (create/delete), `csv_import.py` (confirm) e
-  `services/recurring.py` (`process_due_recurring`): il saldo si ricalcola sempre on
-  read
+- Migration `006_real_balance_model` — renames `accounts.balance` →
+  `accounts.opening_balance` and "unloads" onto this column the net of all
+  existing transactions, so that the computed real balance remains unchanged after the
+  migration
+- `app/services/balance.py` — `compute_balances()` / `compute_balance()`: an account's real
+  balance = `opening_balance + Σ(income − expenses)` of transactions with
+  `date <= as_of` (default: now)
+- Removed all direct mutations of `account.balance` from
+  `transactions.py` (create/delete), `csv_import.py` (confirm) and
+  `services/recurring.py` (`process_due_recurring`): the balance is now always recalculated
+  on read
 - `app/api/v1/endpoints/accounts.py`:
-  - `AccountOut.balance` è ora il saldo reale calcolato (`compute_balances`)
-  - `AccountCreate` usa `opening_balance` (saldo iniziale, label UI "Saldo iniziale")
-  - `POST /accounts/{id}/reconcile` non aggiorna più `account.balance`: crea solo la
-    transazione di rettifica (`is_reconciliation=true`) e il nuovo saldo viene
-    ricalcolato da `compute_balance`. Le rettifiche continuano a contare come
-    entrate/uscite normali in `/stats/summary` e `/stats/trend` (per scelta esplicita:
-    una rettifica positiva va in "Entrate", una negativa in "Uscite")
+  - `AccountOut.balance` is now the computed real balance (`compute_balances`)
+  - `AccountCreate` uses `opening_balance` (opening balance, UI label "Opening balance")
+  - `POST /accounts/{id}/reconcile` no longer updates `account.balance`: it only creates
+    the adjustment transaction (`is_reconciliation=true`) and the new balance is
+    recalculated by `compute_balance`. Adjustments continue to count as
+    normal income/expenses in `/stats/summary` and `/stats/trend` (by explicit choice:
+    a positive adjustment goes into "Income", a negative one into "Expenses")
 - `app/api/v1/endpoints/transactions.py`:
-  - `GET /transactions/` accetta `start`/`end` (oltre a `year`/`month`) e
-    `account_id` come filtri
-  - nuovo `PATCH /transactions/{id}` (`TransactionUpdate`, tutti i campi opzionali) per
-    la modifica di una transazione esistente
+  - `GET /transactions/` accepts `start`/`end` (in addition to `year`/`month`) and
+    `account_id` as filters
+  - new `PATCH /transactions/{id}` (`TransactionUpdate`, all fields optional) for
+    editing an existing transaction
 - `app/services/recurring.py` — `projected_occurrences_in_range(rt, start, end, today)`
-  generalizza `projected_occurrences()` a un intervallo di date arbitrario (non solo il
-  mese corrente)
+  generalizes `projected_occurrences()` to an arbitrary date range (not just the
+  current month)
 - `/api/v1/stats/monthly` → **`GET /api/v1/stats/summary?start=...&end=...&account_id=...`**
-  (`/stats/trend` invariato):
-  - `income` / `expenses` — entrate/uscite reali (`date <= now`) nel periodo
-  - `pending_expenses` — spese con data futura nel periodo + occorrenze ricorrenti
-    previste non ancora generate
-  - `balance` — saldo reale (`compute_balances`) del/dei conto/i in scope, **indipendente
-    dal periodo** (stesso valore della pagina Conti)
-  - `by_category` — spese reali + proiezioni ricorrenti del periodo; le spese senza
-    categoria vengono raggruppate sotto la categoria predefinita "Varie" 📦
+  (`/stats/trend` unchanged):
+  - `income` / `expenses` — real income/expenses (`date <= now`) in the period
+  - `pending_expenses` — expenses with a future date in the period + projected recurring
+    occurrences not yet generated
+  - `balance` — real balance (`compute_balances`) of the account(s) in scope, **independent
+    of the period** (same value as the Accounts page)
+  - `by_category` — real expenses + recurring projections for the period; expenses without
+    a category are grouped under the default "Miscellaneous" 📦 category
 
 ### Frontend
-- `store/dateStore.ts` — esteso con `mode: 'month' | 'week' | 'custom'`,
-  `customStart`/`customEnd`, `getRange()`; settimana = Lunedì-Domenica (`dayjs`
+- `store/dateStore.ts` — extended with `mode: 'month' | 'week' | 'custom'`,
+  `customStart`/`customEnd`, `getRange()`; week = Monday-Sunday (`dayjs`
   `isoWeek`)
-- `components/layout/PeriodPanel.tsx` — pannello per scegliere Mese corrente / Settimana
-  corrente / Intervallo personalizzato (con campi "Da"/"A"), apribile da `TopBar.tsx`
-- `hooks/useSummaryStats.ts` (ex `useMonthlyStats.ts`) e `hooks/useTransactions.ts` —
-  usano `getRange()` + conto selezionato, chiamano `/stats/summary` e
-  `/transactions/?start=...&end=...`; invalidazione cache per prefisso
+- `components/layout/PeriodPanel.tsx` — panel to choose Current month / Current
+  week / Custom range (with "From"/"To" fields), openable from `TopBar.tsx`
+- `hooks/useSummaryStats.ts` (formerly `useMonthlyStats.ts`) and `hooks/useTransactions.ts` —
+  use `getRange()` + selected account, call `/stats/summary` and
+  `/transactions/?start=...&end=...`; cache invalidation by prefix
   (`['stats']`, `['transactions']`, `['accounts']`)
 - `components/dashboard/SummaryBar.tsx`:
-  - "Entrate" / "Uscite" / "Non contabilizzate" → metriche del periodo selezionato
-  - "Saldo" → saldo reale del/dei conto/i (`summary.balance`, uguale alla pagina Conti)
-  - "Saldo disponibile" → `balance - pending_expenses`
-- `pages/Dashboard.tsx` — cliccando una fetta/voce del grafico a torta si filtra
-  l'elenco movimenti del periodo per quella categoria (le spese senza categoria
-  rientrano in "Varie"); ricliccando si torna alla vista per categorie
-- `components/transactions/AddTransactionSheet.tsx` — modalità duale create/modifica
-  tramite prop opzionale `transaction`: precompila i campi e usa
-  `PATCH /transactions/{id}` invece di `POST`; limite data portato a "oggi + 1 anno"
-  (permette transazioni future)
-- `components/transactions/TransactionDialogs.tsx` — nuovo componente condiviso
-  (estratto da `Transactions.tsx`, riusato in `Dashboard.tsx`): bottom sheet di
-  dettaglio movimento con bottoni "Modifica" e "Elimina" + dialog di conferma
-  eliminazione
-- `components/accounts/AddAccountSheet.tsx` / `api/accounts.ts` — campo "Saldo iniziale"
-  mappato su `opening_balance`
+  - "Income" / "Expenses" / "Not yet posted" → metrics for the selected period
+  - "Balance" → real balance of the account(s) (`summary.balance`, same as the Accounts page)
+  - "Available balance" → `balance - pending_expenses`
+- `pages/Dashboard.tsx` — clicking a slice/item of the pie chart filters
+  the transaction list for the period by that category (expenses without a category
+  fall under "Miscellaneous"); clicking again returns to the by-category view
+- `components/transactions/AddTransactionSheet.tsx` — dual create/edit mode
+  via optional `transaction` prop: prefills the fields and uses
+  `PATCH /transactions/{id}` instead of `POST`; date limit extended to "today + 1 year"
+  (allows future transactions)
+- `components/transactions/TransactionDialogs.tsx` — new shared component
+  (extracted from `Transactions.tsx`, reused in `Dashboard.tsx`): transaction detail
+  bottom sheet with "Edit" and "Delete" buttons + delete confirmation
+  dialog
+- `components/accounts/AddAccountSheet.tsx` / `api/accounts.ts` — "Opening balance" field
+  mapped to `opening_balance`
 
-**Criteri di completamento**:
-- `alembic upgrade head` applica `006` senza errori; per un conto con saldo noto,
-  `GET /accounts` restituisce lo stesso saldo di prima della migrazione
-- Una transazione con data futura non modifica il saldo del conto ma appare in
-  Movimenti e in "Non contabilizzate"
-- Cambiando periodo in Home (mese/settimana/intervallo personalizzato) le card e i
-  Movimenti si aggiornano coerentemente; "Saldo" è sempre uguale al saldo del conto
-  nella pagina Conti
-- Cliccando una categoria nel grafico a torta si vedono i movimenti di quella categoria
-  del periodo (incluse le spese senza categoria sotto "Varie"); ricliccando si torna
-  alla vista generale
-- Da un movimento si può aprire "Modifica" (precompilato, salva con `PATCH`) o
-  "Elimina" (con conferma)
-- Una riconciliazione aggiorna sia il saldo in Conti che la card "Saldo" in Home, e la
-  rettifica compare in Entrate/Uscite del periodo in cui è stata creata
+**Completion criteria**:
+- `alembic upgrade head` applies `006` without errors; for an account with a known balance,
+  `GET /accounts` returns the same balance as before the migration
+- A transaction with a future date does not change the account balance but appears in
+  Transactions and in "Not yet posted"
+- Changing the period on Home (month/week/custom range) the cards and
+  Transactions update consistently; "Balance" always equals the account balance
+  on the Accounts page
+- Clicking a category in the pie chart shows the transactions for that category
+  in the period (including expenses without a category under "Miscellaneous"); clicking
+  again returns to the general view
+- From a transaction you can open "Edit" (prefilled, saves with `PATCH`) or
+  "Delete" (with confirmation)
+- A reconciliation updates both the balance in Accounts and the "Balance" card on Home, and
+  the adjustment appears in Income/Expenses for the period in which it was created
 
 ---
 
-## Struttura file finale attesa
+## Expected final file structure
 
 ```
 monefy-clone/
@@ -940,7 +938,7 @@ monefy-clone/
 ├── .gitignore
 ├── docker-compose.yml            ← dev
 ├── docker-compose.prod.yml       ← prod
-├── ROADMAP.md                    ← questo file
+├── ROADMAP.md                    ← this file
 │
 ├── backend/
 │   ├── Dockerfile.dev
@@ -964,7 +962,7 @@ monefy-clone/
 │       │   ├── account.py
 │       │   ├── category.py
 │       │   └── transaction.py
-│       ├── schemas/              ← Pydantic schemas separati dai models
+│       ├── schemas/              ← Pydantic schemas separate from models
 │       └── api/v1/
 │           ├── __init__.py
 │           └── endpoints/
@@ -1041,33 +1039,33 @@ monefy-clone/
 
 ---
 
-## Prompt suggeriti per Claude in VS Code
+## Suggested prompts for Claude in VS Code
 
-### Inizio sessione
+### Session start
 ```
-Sei il mio assistente di sviluppo per questo progetto.
-Leggi ROADMAP.md per capire il contesto.
-Stack: FastAPI + PostgreSQL backend, React + Vite + Tailwind frontend, tutto in Docker.
-Prima di scrivere qualsiasi codice, leggi i file esistenti nella directory su cui stai lavorando.
-```
-
-### Per iniziare una milestone
-```
-Implementa la Milestone 3 della ROADMAP.md (Frontend: autenticazione e scaffolding).
-Leggi prima i file esistenti in frontend/src/.
-Crea tutti i file elencati e assicurati che i criteri di completamento siano soddisfatti.
+You are my development assistant for this project.
+Read ROADMAP.md to understand the context.
+Stack: FastAPI + PostgreSQL backend, React + Vite + Tailwind frontend, all in Docker.
+Before writing any code, read the existing files in the directory you're working on.
 ```
 
-### Per debug
+### To start a milestone
 ```
-Ho un errore su [endpoint/componente]. Leggi il file [path] e il messaggio di errore:
-[errore]
-Trova la causa e correggi.
+Implement Milestone 3 from ROADMAP.md (Frontend: authentication and scaffolding).
+First read the existing files in frontend/src/.
+Create all the listed files and make sure the completion criteria are met.
 ```
 
-### Per aggiungere una feature non in roadmap
+### For debugging
 ```
-Aggiungi [feature] mantenendo coerenza con il resto del progetto.
-Usa lo stesso pattern degli altri endpoint/componenti esistenti.
-Non modificare file non necessari.
+I have an error in [endpoint/component]. Read the file [path] and the error message:
+[error]
+Find the cause and fix it.
+```
+
+### To add a feature not in the roadmap
+```
+Add [feature] while staying consistent with the rest of the project.
+Use the same pattern as other existing endpoints/components.
+Do not modify unnecessary files.
 ```
