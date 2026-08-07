@@ -72,6 +72,9 @@ async def list_accounts(db: AsyncSession = Depends(get_db), user: User = Depends
 async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     account = Account(**data.model_dump(), user_id=user.id)
     db.add(account)
+    if user.default_account_id is None:
+        await db.flush()
+        user.default_account_id = account.id
     await db.commit()
     await db.refresh(account)
     return _out(account, account.opening_balance)

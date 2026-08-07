@@ -54,7 +54,9 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
 
   const filteredCats = categories.filter(c => c.type === type || type === 'transfer')
   const selectedCat = categories.find(c => c.id === catId)
-  const selectedAcc = accounts.find(a => a.id === accId) ?? accounts[0]
+  const selectedAcc = accounts.find(a => a.id === accId)
+    ?? accounts.find(a => !a.meal_voucher_value)
+    ?? accounts[0]
   const selectedToAcc = accounts.find(a => a.id === toAccId)
 
   const isVoucherAccount = !!(selectedAcc?.meal_voucher_value)
@@ -90,7 +92,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
   const mutation = useMutation({
     mutationFn: () => isEdit
       ? transactionsApi.update(transaction!.id, {
-          account_id:    accId || accounts[0]?.id,
+          account_id:    accId || selectedAcc?.id,
           to_account_id: type === 'transfer' ? (toAccId || undefined) : null,
           category_id:   catId || null,
           amount: finalAmount,
@@ -100,7 +102,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
           voucher_quantity: voucherQuantity,
         })
       : transactionsApi.create({
-          account_id:    accId || accounts[0]?.id,
+          account_id:    accId || selectedAcc?.id,
           to_account_id: type === 'transfer' ? (toAccId || undefined) : undefined,
           category_id:   catId || undefined,
           amount: finalAmount,
