@@ -358,7 +358,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
           value={draftNote}
           onChange={e => setDraftNote(e.target.value)}
           placeholder="Opzionale…"
-          className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60 mb-2"
+          className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60 mb-2"
         />
       </FieldDialog>
 
@@ -374,7 +374,7 @@ export default function AddTransactionSheet({ open, onClose, transaction }: Prop
           value={draftDate}
           max={dayjs().add(1, 'year').format('YYYY-MM-DD')}
           onChange={e => setDraftDate(e.target.value)}
-          className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 mb-2"
+          className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base focus:outline-none focus:ring-2 focus:ring-brand/60 mb-2"
         />
       </FieldDialog>
     </BottomSheet>

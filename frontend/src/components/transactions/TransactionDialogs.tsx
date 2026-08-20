@@ -27,7 +27,7 @@ export default function TransactionDialogs({
 }: Props) {
   return (
     <>
-      <BottomSheet open={!!detailTx} onClose={onCloseDetail} maxHeight="max-h-[60dvh]">
+      <BottomSheet open={!!detailTx} onClose={onCloseDetail} maxHeight="max-h-[60svh]">
         {detailTx && (
           <DetailContent
             tx={detailTx}
@@ -90,7 +90,7 @@ function DetailContent({ tx, categoryMap, accountMap, onClose, onEdit, onDelete 
   ]
 
   return (
-    <div className="px-4 pb-6 pt-2">
+    <div className="px-4 pb-6 pt-2 flex-1 min-h-0 overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <span className="text-xs text-white/40 uppercase tracking-wide">Dettaglio</span>
         <button onClick={onClose} className="p-1 text-white/30 hover:text-white/60">
@@ -112,9 +112,9 @@ function DetailContent({ tx, categoryMap, accountMap, onClose, onEdit, onDelete 
       {/* Fields */}
       <div className="bg-surface-overlay rounded-xl divide-y divide-white/5">
         {rows.map(r => (
-          <div key={r.label} className="flex items-center justify-between px-4 py-3">
-            <span className="text-sm text-white/40">{r.label}</span>
-            <span className="text-sm text-white font-medium capitalize">{r.value}</span>
+          <div key={r.label} className="flex items-start justify-between gap-3 px-4 py-3">
+            <span className="text-sm text-white/40 flex-shrink-0">{r.label}</span>
+            <span className="text-sm text-white font-medium capitalize text-right min-w-0 break-words">{r.value}</span>
           </div>
         ))}
       </div>

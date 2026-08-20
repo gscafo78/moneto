@@ -111,7 +111,7 @@ export default function AddCategorySheet({ open, onClose, category, defaultType 
           <label className="text-xs text-white/40 uppercase tracking-wide mb-1.5 block">Nome</label>
           <input type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="Es. Ristorante"
-            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60" />
+            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60" />
         </div>
 
         {/* Icona / Colore */}

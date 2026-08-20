@@ -567,7 +567,7 @@ export default function Settings() {
                   value={smtpHost}
                   onChange={e => setSmtpHost(e.target.value)}
                   placeholder="smtp.esempio.com"
-                  className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
+                  className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-base focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
                 />
               </div>
               <div>
@@ -577,7 +577,7 @@ export default function Settings() {
                   value={smtpPort}
                   onChange={e => setSmtpPort(e.target.value)}
                   placeholder="587"
-                  className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
+                  className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-base focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
                 />
               </div>
             </div>
@@ -588,7 +588,7 @@ export default function Settings() {
                 value={smtpUser}
                 onChange={e => setSmtpUser(e.target.value)}
                 placeholder="utente SMTP"
-                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
+                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-base focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
               />
             </div>
             <div>
@@ -598,7 +598,7 @@ export default function Settings() {
                 value={smtpPassword}
                 onChange={e => setSmtpPassword(e.target.value)}
                 placeholder={smtpPasswordSet ? '••••••••' : 'password SMTP'}
-                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
+                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-base focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
               />
             </div>
             <div>
@@ -608,7 +608,7 @@ export default function Settings() {
                 value={smtpFrom}
                 onChange={e => setSmtpFrom(e.target.value)}
                 placeholder="Moneto <no-reply@esempio.com>"
-                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
+                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-white/20 text-base focus:outline-none focus:ring-2 focus:ring-brand/60 transition"
               />
             </div>
             <label className="flex items-center gap-2.5 cursor-pointer select-none">

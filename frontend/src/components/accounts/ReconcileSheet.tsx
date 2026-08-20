@@ -80,7 +80,7 @@ export default function ReconcileSheet({ open, onClose, account }: Props) {
                 inputMode="decimal"
                 value={realBalance}
                 onChange={e => setRealBalance(e.target.value)}
-                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60"
+                className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base focus:outline-none focus:ring-2 focus:ring-brand/60"
               />
             </div>
 

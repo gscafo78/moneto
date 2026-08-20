@@ -108,7 +108,7 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Es. Conto corrente"
-            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60"
+            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60"
           />
         </div>
 
@@ -121,7 +121,7 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
             value={mealVoucherValue}
             onChange={e => setMealVoucherValue(e.target.value)}
             placeholder="es. 7.00"
-            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60"
+            className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-brand/60"
           />
         </div>
 
@@ -134,7 +134,7 @@ export default function AddAccountSheet({ open, onClose, account, onImport, onRe
               inputMode="decimal"
               value={balance}
               onChange={e => setBalance(e.target.value)}
-              className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60"
+              className="w-full bg-surface-overlay border border-white/10 rounded-xl px-3 py-2.5 text-white text-base focus:outline-none focus:ring-2 focus:ring-brand/60"
             />
           </div>
         )}

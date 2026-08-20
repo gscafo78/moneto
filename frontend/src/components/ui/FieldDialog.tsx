@@ -14,7 +14,7 @@ export default function FieldDialog({ open, title, onCancel, onConfirm, canConfi
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#1a1a24] rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[85dvh]">
+      <div className="bg-[#1a1a24] rounded-2xl w-full max-w-sm shadow-2xl flex flex-col max-h-[85svh]">
         <div className="px-4 pt-4 pb-2 flex-shrink-0">
           <h3 className="text-sm font-semibold text-white/70">{title}</h3>
         </div>

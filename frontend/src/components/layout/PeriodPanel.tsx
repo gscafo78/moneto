@@ -54,7 +54,7 @@ export default function PeriodPanel({ onClose }: { onClose: () => void }) {
               value={from}
               max={to}
               onChange={e => setFrom(e.target.value)}
-              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60"
+              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-2 text-white text-base focus:outline-none focus:ring-2 focus:ring-brand/60"
             />
           </div>
           <div>
@@ -64,7 +64,7 @@ export default function PeriodPanel({ onClose }: { onClose: () => void }) {
               value={to}
               min={from}
               onChange={e => setTo(e.target.value)}
-              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-brand/60"
+              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-2 text-white text-base focus:outline-none focus:ring-2 focus:ring-brand/60"
             />
           </div>
           <button

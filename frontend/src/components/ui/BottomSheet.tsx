@@ -5,11 +5,11 @@ interface Props {
   open: boolean
   onClose: () => void
   children: ReactNode
-  /** Max height as Tailwind class, e.g. 'max-h-[90dvh]' */
+  /** Max height as Tailwind class, e.g. 'max-h-[90svh]' */
   maxHeight?: string
 }
 
-export default function BottomSheet({ open, onClose, children, maxHeight = 'max-h-[92dvh]' }: Props) {
+export default function BottomSheet({ open, onClose, children, maxHeight = 'max-h-[92svh]' }: Props) {
   // Blocca lo scroll del body quando il sheet è aperto
   useEffect(() => {
     if (open) document.body.style.overflow = 'hidden'
