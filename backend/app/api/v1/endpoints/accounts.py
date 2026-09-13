@@ -88,7 +88,7 @@ async def update_account(
     user: User = Depends(get_current_user),
 ):
     account = await _get_account(db, account_id, user.id)
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(account, field, value)
     await db.commit()
     await db.refresh(account)

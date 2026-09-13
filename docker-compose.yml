@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 services:
   db:
     image: postgres:16-alpine
@@ -16,6 +16,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   backend:
     build:
@@ -34,6 +42,14 @@ services:
         condition: service_healthy
     command: >
       bash -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   frontend:
     build:
@@ -50,6 +66,14 @@ services:
     depends_on:
       - backend
     command: npm run dev -- --host 0.0.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
 volumes:
   pg_data:
